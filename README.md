@@ -16,7 +16,13 @@ A **free**, open-source music player for Android.
 
 ## Screenshots
 
-_Add screenshots here once you have them._
+![Main screen](img/main-page.jpg)
+
+![Player screen](img/big-player.jpg)
+
+![Equalizer](img/equalizer.jpg)
+
+![Settings](img/settings.jpg)
 
 ## Planned Features
 
@@ -47,7 +53,7 @@ _Add screenshots here once you have them._
 3. `Build → Make Project` — no extra setup needed
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/HexaPlayer.git
+git clone https://github.com/OxoGhost01/HexaPlayer.git
 ```
 
 ## License
