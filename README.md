@@ -29,6 +29,7 @@ A **free**, open-source music player for Android.
 
 - **Downloader** — download songs directly in the app by title, album, or Spotify playlist
 - **Android Auto** — control playback from your car
+- **Shazam** integration
 
 ## Tech Stack
 
