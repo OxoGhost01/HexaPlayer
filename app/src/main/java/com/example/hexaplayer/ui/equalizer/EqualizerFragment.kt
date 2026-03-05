@@ -61,8 +61,6 @@ class EqualizerFragment : Fragment() {
         }
     }
 
-    // ── Equalizer ─────────────────────────────────────────────────────────────
-
     private fun setupEqualizer() {
         val eq = repo.getEqualizer()
 
@@ -207,8 +205,6 @@ class EqualizerFragment : Fragment() {
         return if (db >= 0) "+%.1f".format(db) else "%.1f".format(db)
     }
 
-    // ── Bass Boost ────────────────────────────────────────────────────────────
-
     private fun setupBassBoost() {
         binding.switchBass.isChecked = repo.bassEnabled
         binding.switchBass.setOnCheckedChangeListener { _, checked -> repo.bassEnabled = checked }
@@ -227,8 +223,6 @@ class EqualizerFragment : Fragment() {
             override fun onStopTrackingTouch(sb: SeekBar) {}
         })
     }
-
-    // ── Virtualizer ───────────────────────────────────────────────────────────
 
     private fun setupVirtualizer() {
         binding.switchVirtualizer.isChecked = repo.virtualizerEnabled
@@ -251,8 +245,6 @@ class EqualizerFragment : Fragment() {
         })
     }
 
-    // ── Loudness Enhancer ─────────────────────────────────────────────────────
-
     private fun setupLoudnessEnhancer() {
         binding.switchLoudness.isChecked = repo.loudnessEnabled
         binding.switchLoudness.setOnCheckedChangeListener { _, checked ->
@@ -274,8 +266,6 @@ class EqualizerFragment : Fragment() {
         })
     }
 
-    // ── Reverb ────────────────────────────────────────────────────────────────
-
     private fun setupReverb() {
         binding.switchReverb.isChecked = repo.reverbEnabled
         binding.switchReverb.setOnCheckedChangeListener { _, checked ->
@@ -295,8 +285,6 @@ class EqualizerFragment : Fragment() {
             override fun onNothingSelected(parent: AdapterView<*>?) {}
         }
     }
-
-    // ── Helpers ───────────────────────────────────────────────────────────────
 
     /** Formats a 0–1000 strength to a percentage string. */
     private fun formatStrength(value: Int): String = "${value / 10}%"

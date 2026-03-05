@@ -121,4 +121,20 @@
     <string name="edit_playlist">Edit playlist</string>
     <string name="playlist_updated">Playlist updated</string>
     <string name="swipe_plays_next">Plays next</string>
+    <string name="edit_song_info">Edit song info</string>
+    <string name="edit_song_dialog_title">Edit Song Info</string>
+    <string name="song_info_updated">Song info updated</string>
+    <string name="metadata_permission_needed">Cannot edit — permission denied</string>
+    <string name="sleep_timer">Sleep timer</string>
+    <string name="sleep_timer_cancel">Cancel timer</string>
+    <string name="sleep_timer_set">%d min timer set</string>
+    <string name="sleep_timer_custom">Custom…</string>
+    <string name="sleep_timer_range_note">10 seconds minimum · 10 hours maximum</string>
+    <!-- Resume on track change -->
+    <string name="settings_resume_on_track_change">Resume on track change</string>
+    <string name="settings_resume_on_track_change_desc">Resume playback when skipping while paused</string>
+    <!-- Lyrics -->
+    <string name="lyrics_searching">Searching for lyrics…</string>
+    <string name="lyrics_not_found">No lyrics found</string>
+    <string name="lyrics_plain_note">Synced lyrics not available</string>
 </resources>

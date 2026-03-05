@@ -60,8 +60,6 @@ class SettingsFragment : Fragment() {
         setupPlaybackSettings()
     }
 
-    // ── Accent Color ──────────────────────────────────────────────────────────
-
     private fun setupAccentColors() {
         val container = binding.accentContainer
         val selectedIndex = viewModel.accentIndex
@@ -104,8 +102,6 @@ class SettingsFragment : Fragment() {
         binding.tvAccentName.text = getString(accentNames[index])
     }
 
-    // ── Music Folder ──────────────────────────────────────────────────────────
-
     private fun setupMusicFolder() {
         binding.etFolder.setText(viewModel.musicFolder)
 
@@ -124,8 +120,6 @@ class SettingsFragment : Fragment() {
         viewModel.loadLibrary()
         Snackbar.make(requireView(), getString(R.string.settings_scan_done), Snackbar.LENGTH_SHORT).show()
     }
-
-    // ── Library Settings ──────────────────────────────────────────────────────
 
     private fun setupLibrarySettings() {
         val sortOptions = resources.getStringArray(R.array.sort_options)
@@ -153,8 +147,6 @@ class SettingsFragment : Fragment() {
         }
     }
 
-    // ── Playback Settings ─────────────────────────────────────────────────────
-
     private fun setupPlaybackSettings() {
         binding.switchGapless.isChecked = viewModel.gaplessPlayback
         binding.switchGapless.setOnCheckedChangeListener { _, checked ->
@@ -164,6 +156,11 @@ class SettingsFragment : Fragment() {
         binding.switchSkipSilence.isChecked = viewModel.skipSilence
         binding.switchSkipSilence.setOnCheckedChangeListener { _, checked ->
             viewModel.skipSilence = checked
+        }
+
+        binding.switchResumeOnTrackChange.isChecked = viewModel.resumeOnTrackChange
+        binding.switchResumeOnTrackChange.setOnCheckedChangeListener { _, checked ->
+            viewModel.resumeOnTrackChange = checked
         }
 
         updateCrossfadeLabel(viewModel.crossfadeTenths)

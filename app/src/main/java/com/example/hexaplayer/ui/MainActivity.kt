@@ -58,8 +58,6 @@ class MainActivity : AppCompatActivity() {
         ActivityResultContracts.RequestPermission()
     ) { /* notification is optional */ }
 
-    // ── Lifecycle ─────────────────────────────────────────────────────────────
-
     override fun onCreate(savedInstanceState: Bundle?) {
         applyAccentTheme()
         super.onCreate(savedInstanceState)
@@ -105,8 +103,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // ── Accent theme ──────────────────────────────────────────────────────────
-
     private fun applyAccentTheme() {
         val prefs = getSharedPreferences("hexa_prefs", MODE_PRIVATE)
         val themeRes = when (prefs.getInt("accent_index", 0)) {
@@ -119,8 +115,6 @@ class MainActivity : AppCompatActivity() {
         }
         setTheme(themeRes)
     }
-
-    // ── Fragments ─────────────────────────────────────────────────────────────
 
     private fun setupFragments() {
         supportFragmentManager.beginTransaction()
@@ -160,8 +154,6 @@ class MainActivity : AppCompatActivity() {
             .commit()
         activeFragment = fragment
     }
-
-    // ── Player bar ────────────────────────────────────────────────────────────
 
     private fun setupPlayerBar() {
         observePlayback()
@@ -250,8 +242,6 @@ class MainActivity : AppCompatActivity() {
         binding.playerBar.root.setBackgroundResource(R.drawable.bg_player_bar)
     }
 
-    // ── Player bar gestures ───────────────────────────────────────────────────
-
     private fun setupPlayerBarGestures() {
         val gestureDetector = GestureDetector(
             this,
@@ -314,8 +304,6 @@ class MainActivity : AppCompatActivity() {
             .addToBackStack("player")
             .commit()
     }
-
-    // ── Permissions ───────────────────────────────────────────────────────────
 
     private fun hasAudioPermission(): Boolean {
         val perm = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)

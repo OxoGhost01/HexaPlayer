@@ -1,10 +1,14 @@
 package com.example.hexaplayer.ui.home
 
+import android.app.Activity
+import android.content.ContentValues
 import android.content.Intent
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.provider.MediaStore
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -14,6 +18,7 @@ import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.PopupMenu
 import androidx.activity.OnBackPressedCallback
+import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.widget.addTextChangedListener
 import androidx.fragment.app.Fragment
@@ -32,6 +37,7 @@ import com.example.hexaplayer.data.Artist
 import com.example.hexaplayer.data.Playlist
 import com.example.hexaplayer.data.Song
 import com.example.hexaplayer.databinding.DialogCreatePlaylistBinding
+import com.example.hexaplayer.databinding.DialogEditSongBinding
 import com.example.hexaplayer.databinding.FragmentHomeBinding
 import com.example.hexaplayer.util.themeColor
 import com.example.hexaplayer.viewmodel.MusicViewModel
@@ -46,7 +52,6 @@ class HomeFragment : Fragment() {
 
     private val viewModel: MusicViewModel by activityViewModels()
 
-    // ---- Detail view state ----
     sealed class DetailEntry {
         data class ArtistDetail(val artist: Artist) : DetailEntry()
         data class AlbumDetail(val album: Album) : DetailEntry()
@@ -55,7 +60,6 @@ class HomeFragment : Fragment() {
 
     private var currentDetail: DetailEntry? = null
 
-    // ---- Search + sort state ----
     enum class SortMode { NAME_ASC, NAME_DESC, DATE_DESC, DATE_ASC }
 
     private var searchQuery = ""
@@ -65,7 +69,6 @@ class HomeFragment : Fragment() {
     // Songs currently shown in the list (for Play All / Shuffle)
     private var currentDisplayedSongs: List<Song> = emptyList()
 
-    // ---- Filter ----
     companion object {
         const val FILTER_ALL = 0
         const val FILTER_ALBUMS = 1
@@ -77,14 +80,40 @@ class HomeFragment : Fragment() {
     private var currentFilter = FILTER_FOLDERS
     private var spinnerInitialized = false
 
-    // ---- Folder navigation ----
     private val folderStack = ArrayDeque<Pair<String, String>>()
 
-    // ---- Adapters ----
+    private var pendingSongUri: Uri? = null
+    private var pendingMetadataValues: ContentValues? = null
+
+    private val writeRequestLauncher = registerForActivityResult(
+        ActivityResultContracts.StartIntentSenderForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val uri = pendingSongUri ?: return@registerForActivityResult
+            val values = pendingMetadataValues ?: return@registerForActivityResult
+            pendingSongUri = null
+            pendingMetadataValues = null
+            try {
+                requireContext().contentResolver.update(uri, values, null, null)
+                viewModel.loadLibrary()
+                Snackbar.make(requireView(), getString(R.string.song_info_updated), Snackbar.LENGTH_SHORT).show()
+            } catch (_: Exception) {
+                Snackbar.make(requireView(), getString(R.string.metadata_permission_needed), Snackbar.LENGTH_SHORT).show()
+            }
+        }
+    }
+
     private val songAdapter = SongAdapter(
         onSongClick = { song ->
-            val songs = viewModel.songs.value ?: return@SongAdapter
-            viewModel.playQueue(songs, songs.indexOf(song))
+            val albums = viewModel.albums.value ?: emptyList()
+            val album = albums.firstOrNull { a -> a.songs.any { it.id == song.id } }
+            if (album != null) {
+                val idx = album.songs.indexOfFirst { it.id == song.id }.coerceAtLeast(0)
+                viewModel.playQueue(album.songs, idx)
+            } else {
+                val songs = viewModel.songs.value ?: return@SongAdapter
+                viewModel.playQueue(songs, songs.indexOf(song))
+            }
         },
         onMoreClick = { song, anchor -> showSongMenu(song, anchor) }
     )
@@ -115,7 +144,6 @@ class HomeFragment : Fragment() {
         onSongMore = { song, anchor -> showSongMenu(song, anchor) }
     )
 
-    // ---- Back press callback ----
     private val backCallback = object : OnBackPressedCallback(false) {
         override fun handleOnBackPressed() {
             when {
@@ -130,7 +158,6 @@ class HomeFragment : Fragment() {
         }
     }
 
-    // ---- Image picker for playlist cover ----
     private var pendingCoverCallback: ((Uri) -> Unit)? = null
     private val imagePicker = registerForActivityResult(
         ActivityResultContracts.OpenDocument()
@@ -146,7 +173,6 @@ class HomeFragment : Fragment() {
         }
     }
 
-    // ---- Lifecycle ----
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?
@@ -168,7 +194,6 @@ class HomeFragment : Fragment() {
         observeViewModel()
     }
 
-    // ---- Setup ----
 
     private fun setupSpinner() {
         val filters = listOf(
@@ -329,7 +354,6 @@ class HomeFragment : Fragment() {
         viewModel.playlists.observe(viewLifecycleOwner) { updateDisplay() }
     }
 
-    // ---- Navigation ----
 
     private fun enterDetail(detail: DetailEntry) {
         currentDetail = detail
@@ -358,7 +382,6 @@ class HomeFragment : Fragment() {
             isSearchVisible || currentDetail != null || folderStack.isNotEmpty()
     }
 
-    // ---- Display logic ----
 
     private fun updateDisplay() {
         updateBackCallback()
@@ -609,7 +632,6 @@ class HomeFragment : Fragment() {
         }
     }
 
-    // ---- Sort ----
 
     private fun nextSortMode(): SortMode {
         val isPlaylistCtx = currentFilter == FILTER_PLAYLISTS && currentDetail == null
@@ -630,7 +652,6 @@ class HomeFragment : Fragment() {
         }
     }
 
-    // ---- Search ----
 
     private fun hideSearch() {
         hideSearchUI()
@@ -653,7 +674,6 @@ class HomeFragment : Fragment() {
         binding.btnSearch.visibility = if (showSearch) View.VISIBLE else View.GONE
     }
 
-    // ---- Helpers ----
 
     private fun showEmpty(empty: Boolean) {
         binding.recyclerView.visibility = if (empty) View.GONE else View.VISIBLE
@@ -672,20 +692,19 @@ class HomeFragment : Fragment() {
         else -> this
     }
 
-    // ---- Image picker ----
 
     private fun pickPlaylistCover(onPicked: (Uri) -> Unit) {
         pendingCoverCallback = onPicked
         imagePicker.launch(arrayOf("image/*"))
     }
 
-    // ---- Dialogs & Menus ----
 
     private fun showSongMenu(song: Song, anchor: View) {
         val popup = PopupMenu(requireContext(), anchor)
         popup.menu.add(0, 0, 0, getString(R.string.add_to_playlist))
         popup.menu.add(0, 1, 1, getString(R.string.play_next))
         popup.menu.add(0, 2, 2, getString(R.string.play_last))
+        popup.menu.add(0, 3, 3, getString(R.string.edit_song_info))
         popup.setOnMenuItemClickListener { item ->
             when (item.itemId) {
                 0 -> showAddToPlaylistDialog(song)
@@ -697,10 +716,70 @@ class HomeFragment : Fragment() {
                     viewModel.addToQueueLast(song)
                     Snackbar.make(requireView(), getString(R.string.added_to_queue), Snackbar.LENGTH_SHORT).show()
                 }
+                3 -> showEditSongDialog(song)
             }
             true
         }
         popup.show()
+    }
+
+    private fun showEditSongDialog(song: Song) {
+        val dialogView = DialogEditSongBinding.inflate(LayoutInflater.from(requireContext()))
+        dialogView.etTitle.setText(song.title)
+        dialogView.etArtist.setText(song.artist)
+        dialogView.etAlbum.setText(song.album)
+
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle(getString(R.string.edit_song_dialog_title))
+            .setView(dialogView.root)
+            .setPositiveButton(getString(R.string.ok)) { _, _ ->
+                val title = dialogView.etTitle.text?.toString()?.trim()?.takeIf { it.isNotEmpty() } ?: song.title
+                val artist = dialogView.etArtist.text?.toString()?.trim()?.takeIf { it.isNotEmpty() } ?: song.artist
+                val album = dialogView.etAlbum.text?.toString()?.trim()?.takeIf { it.isNotEmpty() } ?: song.album
+                doUpdateSongMetadata(song, title, artist, album)
+            }
+            .setNegativeButton(getString(R.string.cancel), null)
+            .show()
+    }
+
+    private fun doUpdateSongMetadata(song: Song, title: String, artist: String, album: String) {
+        val values = ContentValues().apply {
+            put(MediaStore.Audio.Media.TITLE, title)
+            put(MediaStore.Audio.Media.ARTIST, artist)
+            put(MediaStore.Audio.Media.ALBUM, album)
+        }
+        try {
+            requireContext().contentResolver.update(song.uri, values, null, null)
+            viewModel.loadLibrary()
+            Snackbar.make(requireView(), getString(R.string.song_info_updated), Snackbar.LENGTH_SHORT).show()
+        } catch (e: SecurityException) {
+            when {
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.R -> {
+                    @Suppress("NewApi")
+                    val req = MediaStore.createWriteRequest(
+                        requireContext().contentResolver, listOf(song.uri)
+                    )
+                    pendingMetadataValues = values
+                    pendingSongUri = song.uri
+                    writeRequestLauncher.launch(
+                        IntentSenderRequest.Builder(req.intentSender).build()
+                    )
+                }
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q -> {
+                    @Suppress("NewApi")
+                    val sender = (e as? android.app.RecoverableSecurityException)
+                        ?.userAction?.actionIntent?.intentSender
+                    if (sender != null) {
+                        pendingMetadataValues = values
+                        pendingSongUri = song.uri
+                        writeRequestLauncher.launch(IntentSenderRequest.Builder(sender).build())
+                    } else {
+                        Snackbar.make(requireView(), getString(R.string.metadata_permission_needed), Snackbar.LENGTH_SHORT).show()
+                    }
+                }
+                else -> Snackbar.make(requireView(), getString(R.string.metadata_permission_needed), Snackbar.LENGTH_SHORT).show()
+            }
+        }
     }
 
     private fun showAddToPlaylistDialog(song: Song) {

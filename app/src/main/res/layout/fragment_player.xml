@@ -36,6 +36,30 @@
         app:layout_constraintEnd_toEndOf="parent" />
 
     <ImageButton
+        android:id="@+id/btn_lyrics"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_marginTop="4dp"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:src="@drawable/ic_lyrics"
+        android:tint="@color/colorTextSecondary"
+        android:contentDescription="Show lyrics"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintEnd_toStartOf="@id/btn_sleep_timer" />
+
+    <ImageButton
+        android:id="@+id/btn_sleep_timer"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_marginTop="4dp"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:src="@drawable/ic_timer"
+        android:tint="@color/colorTextSecondary"
+        android:contentDescription="Sleep timer"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintEnd_toStartOf="@id/btn_queue" />
+
+    <ImageButton
         android:id="@+id/btn_queue"
         android:layout_width="48dp"
         android:layout_height="48dp"
@@ -66,6 +90,42 @@
         app:layout_constraintBottom_toTopOf="@id/tv_title"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
+
+    <!-- ── LYRICS OVERLAY — same position as album art ──────────────── -->
+    <FrameLayout
+        android:id="@+id/lyrics_container"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:layout_marginStart="28dp"
+        android:layout_marginEnd="28dp"
+        android:layout_marginTop="8dp"
+        android:layout_marginBottom="16dp"
+        android:visibility="gone"
+        app:layout_constraintTop_toBottomOf="@id/btn_close"
+        app:layout_constraintBottom_toTopOf="@id/tv_title"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <TextView
+            android:id="@+id/tv_lyrics_status"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:textColor="@color/colorTextSecondary"
+            android:textSize="14sp"
+            android:visibility="gone" />
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/rv_lyrics"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:clipToPadding="false"
+            android:paddingTop="24dp"
+            android:paddingBottom="24dp"
+            android:overScrollMode="never"
+            android:visibility="gone" />
+
+    </FrameLayout>
 
     <!-- ── SONG TITLE ─────────────────────────────────────────────────── -->
     <TextView

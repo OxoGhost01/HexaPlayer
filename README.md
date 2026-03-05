@@ -6,13 +6,14 @@ A **free**, open-source music player for Android.
 
 - **Browse** your library by Songs, Albums, Artists, Playlists, or Folders
 - **Full-screen player** with seekbar, shuffle, repeat, and queue view
-- **Queue management** — Play Next, Add to Queue, reorder with drag-and-drop
+- **Queue management** — Play Next, Add to Queue, reorder with drag-and-drop; clicking a song queues the rest of the album automatically
 - **Playlists** — create with a custom cover image, add/remove songs
 - **Search & sort** across all views
 - **Equaliser** — 10-band EQ, bass boost, virtualizer, loudness enhancer, and reverb
-- **Swipe gestures** — swipe left/right on the player bar or album art to skip; swipe down on the fullscreen player to dismiss
+- **Sleep timer** — stop playback after a preset time (15 / 30 / 45 / 60 min) or a custom duration (10 s – 10 h)
+- **Lyrics** — synced (LRC) and plain lyrics via [LRCLIB](https://lrclib.net), displayed in the full-screen player
+- **Song metadata editing** — edit title, artist, and album directly from the 3-dot menu
 - **Accent themes** — 6 color presets to match your style
-- Edge-to-edge layout with system bar insets
 
 ## Screenshots
 
@@ -28,7 +29,6 @@ A **free**, open-source music player for Android.
 
 - **Downloader** — download songs directly in the app by title, album, or Spotify playlist
 - **Android Auto** — control playback from your car
-- **Timer** — set a sleep timer to stop playback automatically
 
 ## Tech Stack
 

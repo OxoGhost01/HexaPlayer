@@ -9,22 +9,11 @@
     android:paddingEnd="16dp"
     android:background="?attr/selectableItemBackground">
 
-    <ImageView
-        android:id="@+id/iv_avatar"
-        android:layout_width="44dp"
-        android:layout_height="44dp"
-        android:scaleType="centerCrop"
-        android:src="@drawable/ic_music_note"
-        android:background="@drawable/bg_album_rounded"
-        android:clipToOutline="true"
-        android:contentDescription="@null" />
-
     <LinearLayout
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_weight="1"
-        android:orientation="vertical"
-        android:layout_marginStart="12dp">
+        android:orientation="vertical">
 
         <TextView
             android:id="@+id/tv_artist_name"

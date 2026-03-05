@@ -16,8 +16,10 @@ import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.example.hexaplayer.data.Album
 import com.example.hexaplayer.data.Artist
+import com.example.hexaplayer.data.LyricsState
 import com.example.hexaplayer.data.Playlist
 import com.example.hexaplayer.data.Song
+import com.example.hexaplayer.repository.LyricsRepository
 import com.example.hexaplayer.repository.MusicRepository
 import com.example.hexaplayer.repository.PlaylistRepository
 import com.example.hexaplayer.service.MusicService
@@ -29,13 +31,18 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
 
     val musicRepository = MusicRepository(application)
     val playlistRepository = PlaylistRepository(application)
+    private val lyricsRepository = LyricsRepository()
+
+    // Lyrics cache + state
+    private val lyricsCache = mutableMapOf<Long, LyricsState>()
+    private val _lyricsState = MutableLiveData<LyricsState>(LyricsState.NotFound)
+    val lyricsState: LiveData<LyricsState> = _lyricsState
 
     private val prefs = application.getSharedPreferences("hexa_prefs", Context.MODE_PRIVATE)
 
     private var controller: MediaController? = null
     private var queue: List<Song> = emptyList()
 
-    // --- Queue state (exposed as LiveData for QueueFragment) ---
     private val _currentQueue = MutableLiveData<List<Song>>(emptyList())
     val currentQueue: LiveData<List<Song>> = _currentQueue
 
@@ -47,7 +54,6 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         _currentQueue.postValue(newQueue)
     }
 
-    // --- Library state ---
     private val _songs = MutableLiveData<List<Song>>(emptyList())
     val songs: LiveData<List<Song>> = _songs
 
@@ -60,7 +66,6 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     private val _playlists = MutableLiveData<List<Playlist>>(emptyList())
     val playlists: LiveData<List<Playlist>> = _playlists
 
-    // --- Playback state ---
     private val _currentSong = MutableLiveData<Song?>(null)
     val currentSong: LiveData<Song?> = _currentSong
 
@@ -79,7 +84,11 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     private val _repeatMode = MutableLiveData(Player.REPEAT_MODE_OFF)
     val repeatMode: LiveData<Int> = _repeatMode
 
-    // ---- Settings ----
+    private val _sleepTimerActive = MutableLiveData(false)
+    val sleepTimerActive: LiveData<Boolean> = _sleepTimerActive
+
+    private val sleepTimerHandler = Handler(Looper.getMainLooper())
+    private var sleepTimerRunnable: Runnable? = null
 
     var musicFolder: String
         get() = prefs.getString("music_folder", "") ?: ""
@@ -112,6 +121,11 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         get() = prefs.getInt("accent_index", 0)
         set(v) { prefs.edit().putInt("accent_index", v).apply() }
 
+    /** Resume playback automatically when skipping while paused. */
+    var resumeOnTrackChange: Boolean
+        get() = prefs.getBoolean("resume_on_track_change", true)
+        set(v) { prefs.edit().putBoolean("resume_on_track_change", v).apply() }
+
     private val handler = Handler(Looper.getMainLooper())
     private val positionRunnable = object : Runnable {
         override fun run() {
@@ -143,8 +157,6 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    // ---- Connection ----
-
     fun connectToService() {
         val token = SessionToken(
             getApplication(),
@@ -159,8 +171,6 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
             } catch (_: Exception) { }
         }, MoreExecutors.directExecutor())
     }
-
-    // ---- Library loading ----
 
     fun loadLibrary() {
         viewModelScope.launch(Dispatchers.IO) {
@@ -183,8 +193,6 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         _playlists.value = playlistRepository.getAll()
     }
 
-    // ---- Playback control ----
-
     fun playQueue(songs: List<Song>, startIndex: Int = 0) {
         val ctrl = controller ?: return
         updateQueue(songs)
@@ -197,9 +205,16 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun playQueueShuffled(songs: List<Song>) {
-        controller?.shuffleModeEnabled = true
-        val startIndex = if (songs.size > 1) songs.indices.random() else 0
-        playQueue(songs, startIndex)
+        val ctrl = controller ?: return
+        val shuffled = songs.shuffled()
+        updateQueue(shuffled)
+        _currentQueueIndex.value = 0
+        val items = shuffled.map { it.toMediaItem() }
+        ctrl.setMediaItems(items, 0, 0L)
+        ctrl.shuffleModeEnabled = true
+        ctrl.prepare()
+        ctrl.play()
+        _currentSong.value = shuffled.firstOrNull()
     }
 
     /** Insert [song] right after the currently playing item. */
@@ -247,14 +262,42 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         controller?.let { if (it.isPlaying) it.pause() else it.play() }
     }
 
-    fun playNext() { controller?.seekToNextMediaItem() }
+    fun playNext() {
+        val ctrl = controller ?: return
+        val shouldResume = resumeOnTrackChange && !ctrl.isPlaying
+        ctrl.seekToNextMediaItem()
+        if (shouldResume) ctrl.play()
+    }
 
-    fun playPrevious() { controller?.seekToPreviousMediaItem() }
+    fun playPrevious() {
+        val ctrl = controller ?: return
+        val shouldResume = resumeOnTrackChange && !ctrl.isPlaying
+        ctrl.seekToPreviousMediaItem()
+        if (shouldResume) ctrl.play()
+    }
 
     fun seekTo(positionMs: Long) { controller?.seekTo(positionMs) }
 
     fun toggleShuffle() {
-        controller?.let { it.shuffleModeEnabled = !it.shuffleModeEnabled }
+        val ctrl = controller ?: return
+        val wasPlaying = ctrl.isPlaying
+        val nowShuffled = _shuffleMode.value ?: false
+        if (!nowShuffled) {
+            // Turning ON: keep current song first, randomize the rest
+            val currentIdx = ctrl.currentMediaItemIndex.coerceAtLeast(0)
+            val currentPos = ctrl.currentPosition
+            val currentSong = queue.getOrNull(currentIdx)
+            val rest = queue.toMutableList()
+            if (currentSong != null && currentIdx < rest.size) rest.removeAt(currentIdx)
+            rest.shuffle()
+            val newQueue = if (currentSong != null) listOf(currentSong) + rest else rest
+            updateQueue(newQueue)
+            val items = newQueue.map { it.toMediaItem() }
+            ctrl.setMediaItems(items, 0, currentPos)
+            ctrl.prepare()
+            if (wasPlaying) ctrl.play()  // only resume if was already playing
+        }
+        ctrl.shuffleModeEnabled = !nowShuffled
     }
 
     fun toggleRepeat() {
@@ -269,17 +312,54 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
 
     fun isControllerReady() = controller != null
 
+    fun setSleepTimer(seconds: Long) {
+        sleepTimerRunnable?.let { sleepTimerHandler.removeCallbacks(it) }
+        sleepTimerRunnable = null
+        if (seconds <= 0) {
+            _sleepTimerActive.value = false
+            return
+        }
+        _sleepTimerActive.value = true
+        val runnable = Runnable {
+            controller?.pause()
+            _sleepTimerActive.postValue(false)
+            sleepTimerRunnable = null
+        }
+        sleepTimerRunnable = runnable
+        sleepTimerHandler.postDelayed(runnable, seconds * 1_000L)
+    }
+
+    fun cancelSleepTimer() {
+        sleepTimerRunnable?.let { sleepTimerHandler.removeCallbacks(it) }
+        sleepTimerRunnable = null
+        _sleepTimerActive.value = false
+    }
+
     private fun syncCurrentSong() {
         val ctrl = controller ?: return
         val idx = ctrl.currentMediaItemIndex
         if (idx >= 0 && idx < queue.size) {
-            _currentSong.postValue(queue[idx])
+            val song = queue[idx]
+            _currentSong.postValue(song)
             _duration.postValue(ctrl.duration.coerceAtLeast(0L))
             _currentQueueIndex.postValue(idx)
+            fetchLyricsForSong(song)
         }
     }
 
-    // ---- Playlist helpers ----
+    private fun fetchLyricsForSong(song: Song) {
+        val cached = lyricsCache[song.id]
+        if (cached != null) {
+            _lyricsState.postValue(cached)
+            return
+        }
+        _lyricsState.postValue(LyricsState.Loading)
+        viewModelScope.launch {
+            val result = lyricsRepository.fetchLyrics(song)
+            lyricsCache[song.id] = result
+            _lyricsState.postValue(result)
+        }
+    }
 
     fun createPlaylist(name: String, coverUri: String? = null): Playlist {
         val pl = Playlist(name = name, coverUri = coverUri)
@@ -319,6 +399,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     override fun onCleared() {
         super.onCleared()
         handler.removeCallbacks(positionRunnable)
+        sleepTimerRunnable?.let { sleepTimerHandler.removeCallbacks(it) }
         controller?.removeListener(playerListener)
         controller?.release()
     }

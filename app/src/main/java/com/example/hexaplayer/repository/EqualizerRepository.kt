@@ -37,8 +37,6 @@ class EqualizerRepository private constructor(private val context: Context) {
     var isInitialized = false
         private set
 
-    // ── Init / Release ────────────────────────────────────────────────────────
-
     fun initEffects(audioSessionId: Int) {
         if (audioSessionId == 0) return
         // Don't re-init if already attached to the same session
@@ -85,15 +83,11 @@ class EqualizerRepository private constructor(private val context: Context) {
         isInitialized = false
     }
 
-    // ── Accessors ─────────────────────────────────────────────────────────────
-
     fun getEqualizer(): Equalizer? = equalizer
     fun getBassBoost(): BassBoost? = bassBoost
     fun getVirtualizer(): Virtualizer? = virtualizer
     fun getLoudnessEnhancer(): LoudnessEnhancer? = loudnessEnhancer
     fun getPresetReverb(): PresetReverb? = presetReverb
-
-    // ── EQ ────────────────────────────────────────────────────────────────────
 
     var eqEnabled: Boolean
         get() = prefs.getBoolean("eq_enabled", false)
@@ -142,8 +136,6 @@ class EqualizerRepository private constructor(private val context: Context) {
         }
     }
 
-    // ── Bass Boost ────────────────────────────────────────────────────────────
-
     var bassEnabled: Boolean
         get() = prefs.getBoolean("bass_enabled", false)
         set(v) {
@@ -158,8 +150,6 @@ class EqualizerRepository private constructor(private val context: Context) {
             prefs.edit().putInt("bass_strength", v.toInt()).apply()
             if (bassBoost?.strengthSupported == true) bassBoost?.setStrength(v)
         }
-
-    // ── Virtualizer ───────────────────────────────────────────────────────────
 
     var virtualizerEnabled: Boolean
         get() = prefs.getBoolean("virt_enabled", false)
@@ -176,8 +166,6 @@ class EqualizerRepository private constructor(private val context: Context) {
             if (virtualizer?.strengthSupported == true) virtualizer?.setStrength(v)
         }
 
-    // ── Loudness Enhancer ─────────────────────────────────────────────────────
-
     var loudnessEnabled: Boolean
         get() = prefs.getBoolean("loud_enabled", false)
         set(v) {
@@ -192,8 +180,6 @@ class EqualizerRepository private constructor(private val context: Context) {
             prefs.edit().putInt("loud_gain", v).apply()
             loudnessEnhancer?.setTargetGain(v)
         }
-
-    // ── Reverb ────────────────────────────────────────────────────────────────
 
     var reverbEnabled: Boolean
         get() = prefs.getBoolean("reverb_enabled", false)
