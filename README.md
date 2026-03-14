@@ -13,6 +13,7 @@ A **free**, open-source music player for Android.
 - **Sleep timer** — stop playback after a preset time (15 / 30 / 45 / 60 min) or a custom duration (10 s – 10 h)
 - **Lyrics** — synced (LRC) and plain lyrics via [LRCLIB](https://lrclib.net), displayed in the full-screen player
 - **Song metadata editing** — edit title, artist, and album directly from the 3-dot menu
+- **Downloader** — download songs directly in the app by title, style, or artist
 - **Accent themes** — 6 color presets to match your style
 
 ## Screenshots
@@ -27,9 +28,12 @@ A **free**, open-source music player for Android.
 
 ## Planned Features
 
-- **Downloader** — download songs directly in the app by title, album, or Spotify playlist
 - **Android Auto** — control playback from your car
+- **Auto-updates** — no more manual updates
+- **Widgets** — add a widget to your home screen
 - **Shazam** integration
+- **Discord Richpresence** integration (because why not)
+- **Wrapped** — a resume of the year
 
 ## Tech Stack
 
