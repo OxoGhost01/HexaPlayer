@@ -29,6 +29,7 @@
     <string name="settings_music_folder_desc">Enter a path relative to your device\'s internal storage root.\n\nExamples:\n• Leave empty → scan all audio on the device\n• Music → only scan /sdcard/Music/\n• Music/Rock → only scan /sdcard/Music/Rock/\n\nTip: use the Folders tab in Home to find the exact path of a folder.</string>
     <string name="settings_scan">Rescan Library</string>
     <string name="settings_scan_done">Library updated</string>
+    <string name="settings_donate">Buy me a coffee ☕</string>
     <string name="settings_accent_color">Accent Color</string>
     <string name="settings_accent_restart">Accent applied — tap Rescan or navigate away to refresh all colors.</string>
     <string name="settings_library">Library</string>
@@ -90,6 +91,36 @@
     </string-array>
 
     <string name="download_coming_soon">Download — coming in a future update</string>
+
+    <!-- Download screen -->
+    <string name="dl_title">Discover Music</string>
+    <string name="dl_subtitle">Search and download Creative Commons music from Jamendo</string>
+    <string name="dl_search_hint">Song title, artist, or genre…</string>
+    <string name="dl_search">Search</string>
+    <string name="dl_change_folder">Change</string>
+    <string name="dl_clear_done">Clear done</string>
+    <string name="dl_empty">Search for music to get started.\nAll tracks are Creative Commons licensed.</string>
+    <string name="dl_error_empty_query">Enter a song name or artist</string>
+    <string name="dl_permission_banner">Storage permission needed to save downloads.</string>
+    <string name="dl_permission_grant">Grant</string>
+    <string name="dl_client_id_hint">Jamendo Client ID</string>
+    <string name="dl_client_id_desc">Free API key from developer.jamendo.com — required to search the catalog.</string>
+    <string name="dl_jamendo_no_client_id">Enter your Jamendo Client ID first (free at developer.jamendo.com)</string>
+    <string name="dl_no_results">No tracks found — try a different search term</string>
+    <string name="dl_results_header">Search results (%d)</string>
+    <string name="dl_section_downloads">Downloads</string>
+    <string name="dl_download_track">Download</string>
+    <string name="dl_added_to_queue">Added: %s</string>
+    <string name="dl_cc_notice">All tracks are Creative Commons licensed. Attribution may be required depending on the license.</string>
+
+    <!-- Download item statuses -->
+    <string name="dl_status_queued">Queued</string>
+    <string name="dl_status_preparing">Preparing…</string>
+    <string name="dl_status_downloading_pct">Downloading… %d%%</string>
+    <string name="dl_status_done">Done ✓</string>
+    <string name="dl_status_skipped">Already exists — skipped</string>
+    <string name="dl_status_error">Error: %s</string>
+    <string name="dl_status_cancelled">Cancelled</string>
     <string name="permission_rationale">HexaPlayer needs access to your audio files to play music.</string>
     <string name="songs_count">%d songs</string>
     <string name="albums_count">%d albums</string>
@@ -101,6 +132,7 @@
     <string name="search_hint">Search…</string>
     <string name="add_cover">Add cover</string>
     <string name="change_cover">Change cover</string>
+    <string name="clear_cover">Clear custom cover</string>
     <string name="add_songs">Add songs</string>
     <string name="songs_added">Songs added</string>
     <string name="no_songs_to_add">All songs are already in this playlist</string>
@@ -114,7 +146,7 @@
     <string name="added_to_queue">Added to queue</string>
     <string name="queue">Queue</string>
     <string name="empty_queue">Queue is empty</string>
-    <string name="queue_shuffle_note">Shuffle is on — drag reorder is disabled</string>
+    <string name="queue_shuffle_note">Shuffle is on — context queue drag is disabled (user queue always reorderable)</string>
     <string name="play_all">▶  Play all</string>
     <string name="shuffle_all">⇀  Shuffle</string>
     <string name="remove_from_queue">Remove</string>

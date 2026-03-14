@@ -1,4 +1,4 @@
-package com.example.hexaplayer
+package com.oxoghost.hexaplayer
 
 import org.junit.Test
 
