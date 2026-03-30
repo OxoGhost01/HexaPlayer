@@ -3,9 +3,7 @@
 A **free**, open-source music player for Android.
 
 ![GitHub Release](https://img.shields.io/github/v/release/oxoghost01/hexaplayer?style=for-the-badge)
-
 ![GitHub Repo stars](https://img.shields.io/github/stars/oxoghost01/hexaplayer?style=for-the-badge)
-
 ![GitHub Downloads (all assets, latest release)](https://img.shields.io/github/downloads/oxoghost01/hexaplayer/latest/total?style=for-the-badge)
 
 ## Features
