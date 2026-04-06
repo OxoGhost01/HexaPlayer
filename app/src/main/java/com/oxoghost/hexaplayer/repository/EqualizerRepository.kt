@@ -1,3 +1,4 @@
+@file:Suppress("DEPRECATION")
 package com.oxoghost.hexaplayer.repository
 
 import android.content.Context

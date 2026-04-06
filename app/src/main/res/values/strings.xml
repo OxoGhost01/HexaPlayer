@@ -169,4 +169,23 @@
     <string name="lyrics_searching">Searching for lyrics…</string>
     <string name="lyrics_not_found">No lyrics found</string>
     <string name="lyrics_plain_note">Synced lyrics not available</string>
+
+    <!-- Auto-update -->
+    <string name="settings_check_updates">Check for updates</string>
+    <string name="update_checking">Checking for updates…</string>
+    <string name="update_available_label">Update available: v%s</string>
+    <string name="update_up_to_date">You\'re up to date</string>
+    <string name="update_error">Could not check for updates</string>
+    <string name="update_dialog_title">Update available</string>
+    <string name="update_dialog_message">Version %s is available. Download now?</string>
+    <string name="update_download">Download</string>
+    <string name="update_install">Install</string>
+    <string name="update_downloading">Downloading v%s…</string>
+    <string name="update_install_permission">Allow HexaPlayer to install apps in Settings first</string>
+
+    <!-- Widgets -->
+    <string name="widget_4x1_label">HexaPlayer (4×1)</string>
+    <string name="widget_4x1_desc">4×1 player widget with album art and controls</string>
+    <string name="widget_5x1_label">HexaPlayer (5×1)</string>
+    <string name="widget_5x1_desc">5×1 compact player widget with full controls</string>
 </resources>

@@ -242,13 +242,13 @@ class HomeFragment : Fragment() {
                 return when {
                     adapter === songAdapter || adapter === detailSongAdapter -> ItemTouchHelper.RIGHT
                     adapter === folderAdapter &&
-                        folderAdapter.getItemViewType(viewHolder.adapterPosition) == FolderAdapter.TYPE_SONG -> ItemTouchHelper.RIGHT
+                        folderAdapter.getItemViewType(viewHolder.bindingAdapterPosition) == FolderAdapter.TYPE_SONG -> ItemTouchHelper.RIGHT
                     else -> 0
                 }
             }
 
             override fun onSwiped(viewHolder: RecyclerView.ViewHolder, direction: Int) {
-                val pos = viewHolder.adapterPosition
+                val pos = viewHolder.bindingAdapterPosition
                 val song: Song? = when (binding.recyclerView.adapter) {
                     songAdapter -> songAdapter.currentList.getOrNull(pos)
                     detailSongAdapter -> detailSongAdapter.currentList.getOrNull(pos)

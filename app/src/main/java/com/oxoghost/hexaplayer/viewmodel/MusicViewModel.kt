@@ -4,7 +4,9 @@ import android.app.Application
 import android.content.ComponentName
 import android.content.Context
 import android.media.MediaScannerConnection
+import android.content.ContentUris
 import android.net.Uri
+import android.os.Bundle
 import android.os.Environment
 import android.os.Handler
 import android.os.Looper
@@ -387,8 +389,12 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     fun playPrevious() {
         val ctrl = controller ?: return
         val shouldResume = resumeOnTrackChange && !ctrl.isPlaying
-        ctrl.seekToPreviousMediaItem()
-        if (shouldResume) ctrl.play()
+        if (ctrl.currentPosition > 5_000L) {
+            ctrl.seekTo(0L)
+        } else {
+            ctrl.seekToPreviousMediaItem()
+            if (shouldResume) ctrl.play()
+        }
     }
 
     fun seekTo(positionMs: Long) { controller?.seekTo(positionMs) }
@@ -563,6 +569,10 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     }
 }
 
+private fun Song.albumArtUri(): Uri = ContentUris.withAppendedId(
+    Uri.parse("content://media/external/audio/albumart"), albumId
+)
+
 private fun Song.toCtxMediaItem(contextIdx: Int): MediaItem =
     MediaItem.Builder()
         .setUri(uri)
@@ -572,6 +582,8 @@ private fun Song.toCtxMediaItem(contextIdx: Int): MediaItem =
                 .setTitle(title)
                 .setArtist(artist)
                 .setAlbumTitle(album)
+                .setArtworkUri(albumArtUri())
+                .setExtras(Bundle().apply { putLong("albumId", albumId) })
                 .build()
         )
         .build()
@@ -585,6 +597,8 @@ private fun Song.toUqMediaItem(uid: String): MediaItem =
                 .setTitle(title)
                 .setArtist(artist)
                 .setAlbumTitle(album)
+                .setArtworkUri(albumArtUri())
+                .setExtras(Bundle().apply { putLong("albumId", albumId) })
                 .build()
         )
         .build()

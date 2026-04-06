@@ -11,18 +11,21 @@ import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
-import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.SeekBar
-import android.widget.TextView
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
+import androidx.lifecycle.lifecycleScope
 import com.oxoghost.hexaplayer.BuildConfig
 import com.oxoghost.hexaplayer.R
 import com.oxoghost.hexaplayer.databinding.FragmentSettingsBinding
+import com.oxoghost.hexaplayer.repository.UpdateRepository
 import com.oxoghost.hexaplayer.util.dpToPx
 import com.google.android.material.snackbar.Snackbar
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class SettingsFragment : Fragment() {
 
@@ -62,7 +65,7 @@ class SettingsFragment : Fragment() {
         setupMusicFolder()
         setupLibrarySettings()
         setupPlaybackSettings()
-        binding.tvVersion.text = "Version ${BuildConfig.VERSION_NAME}"
+        setupUpdateCheck()
     }
 
     private fun setupDonateButton() {
@@ -202,6 +205,37 @@ class SettingsFragment : Fragment() {
         } else {
             val secs = tenths / 10.0
             "%.1fs".format(secs)
+        }
+    }
+
+    private fun setupUpdateCheck() {
+        binding.tvVersion.text = "Version ${BuildConfig.VERSION_NAME}"
+        binding.btnCheckUpdates.setOnClickListener { checkForUpdates() }
+    }
+
+    private fun checkForUpdates() {
+        binding.btnCheckUpdates.isEnabled = false
+        binding.tvUpdateStatus.visibility = View.VISIBLE
+        binding.tvUpdateStatus.text = getString(R.string.update_checking)
+
+        lifecycleScope.launch(Dispatchers.IO) {
+            val info = UpdateRepository().checkForUpdate()
+            withContext(Dispatchers.Main) {
+                if (_binding == null) return@withContext
+                binding.btnCheckUpdates.isEnabled = true
+                if (info == null) {
+                    binding.tvUpdateStatus.text = getString(R.string.update_error)
+                    return@withContext
+                }
+                if (UpdateRepository.isNewerVersion(BuildConfig.VERSION_NAME, info.latestVersion)) {
+                    binding.tvUpdateStatus.text =
+                        getString(R.string.update_available_label, info.latestVersion)
+                    (requireActivity() as? com.oxoghost.hexaplayer.ui.MainActivity)
+                        ?.showUpdateBanner(info)
+                } else {
+                    binding.tvUpdateStatus.text = getString(R.string.update_up_to_date)
+                }
+            }
         }
     }
 

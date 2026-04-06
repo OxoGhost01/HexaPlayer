@@ -1,13 +1,21 @@
 package com.oxoghost.hexaplayer.ui
 
 import android.Manifest
+import android.app.DownloadManager
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.content.res.ColorStateList
 import android.graphics.Bitmap
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.GradientDrawable
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Environment
+import android.provider.Settings
 import android.view.GestureDetector
 import android.view.MotionEvent
 import android.view.View
@@ -21,12 +29,18 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.updatePadding
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.lifecycleScope
 import androidx.palette.graphics.Palette
 import coil.imageLoader
 import coil.request.ImageRequest
+import com.google.android.material.snackbar.Snackbar
+import com.oxoghost.hexaplayer.BuildConfig
 import com.oxoghost.hexaplayer.R
 import com.oxoghost.hexaplayer.adapter.SongAdapter
+import com.oxoghost.hexaplayer.data.Song
 import com.oxoghost.hexaplayer.databinding.ActivityMainBinding
+import com.oxoghost.hexaplayer.repository.UpdateInfo
+import com.oxoghost.hexaplayer.repository.UpdateRepository
 import com.oxoghost.hexaplayer.ui.download.DownloadFragment
 import com.oxoghost.hexaplayer.ui.equalizer.EqualizerFragment
 import com.oxoghost.hexaplayer.ui.home.HomeFragment
@@ -34,6 +48,9 @@ import com.oxoghost.hexaplayer.ui.player.PlayerFragment
 import com.oxoghost.hexaplayer.ui.settings.SettingsFragment
 import com.oxoghost.hexaplayer.util.themeColor
 import com.oxoghost.hexaplayer.viewmodel.MusicViewModel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlin.math.abs
 
 class MainActivity : AppCompatActivity() {
@@ -47,6 +64,23 @@ class MainActivity : AppCompatActivity() {
     private var settingsFragment: Fragment = SettingsFragment()
     private var activeFragment: Fragment = homeFragment
 
+    // ── Update / download state ───────────────────────────────────────────────
+    private var pendingUpdateInfo: UpdateInfo? = null
+    private var pendingDownloadId = -1L
+
+    private val downloadCompleteReceiver = object : BroadcastReceiver() {
+        override fun onReceive(ctx: Context, intent: Intent) {
+            val id = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1)
+            if (id == pendingDownloadId && id != -1L) {
+                pendingDownloadId = -1L
+                val dm = ctx.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+                val apkUri = dm.getUriForDownloadedFile(id) ?: return
+                startInstall(apkUri)
+            }
+        }
+    }
+
+    // ── Permission launchers ──────────────────────────────────────────────────
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { grants ->
@@ -58,6 +92,7 @@ class MainActivity : AppCompatActivity() {
         ActivityResultContracts.RequestPermission()
     ) { /* notification is optional */ }
 
+    // ── Lifecycle ─────────────────────────────────────────────────────────────
     override fun onCreate(savedInstanceState: Bundle?) {
         applyAccentTheme()
         super.onCreate(savedInstanceState)
@@ -82,9 +117,28 @@ class MainActivity : AppCompatActivity() {
             activeFragment = listOf(homeFragment, downloadFragment, equalizerFragment, settingsFragment)
                 .firstOrNull { !it.isHidden } ?: homeFragment
         }
+
         setupBottomNav()
         setupPlayerBar()
+        setupUpdateBanner()
         setupPermissionView()
+
+        // RECEIVER_EXPORTED is required: DownloadManager is a system process and its broadcast
+        // is blocked by RECEIVER_NOT_EXPORTED on API 33+. The payload is just the download ID,
+        // which we verify against pendingDownloadId, so exporting is safe.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(
+                downloadCompleteReceiver,
+                IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE),
+                RECEIVER_EXPORTED
+            )
+        } else {
+            @Suppress("UnspecifiedRegisterReceiverFlag")
+            registerReceiver(
+                downloadCompleteReceiver,
+                IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE)
+            )
+        }
 
         viewModel.connectToService()
 
@@ -93,6 +147,8 @@ class MainActivity : AppCompatActivity() {
         } else {
             showPermissionView(true)
         }
+
+        checkForUpdatesInBackground()
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
@@ -103,6 +159,12 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    override fun onDestroy() {
+        super.onDestroy()
+        runCatching { unregisterReceiver(downloadCompleteReceiver) }
+    }
+
+    // ── Theme ─────────────────────────────────────────────────────────────────
     private fun applyAccentTheme() {
         val prefs = getSharedPreferences("hexa_prefs", MODE_PRIVATE)
         val themeRes = when (prefs.getInt("accent_index", 0)) {
@@ -116,6 +178,7 @@ class MainActivity : AppCompatActivity() {
         setTheme(themeRes)
     }
 
+    // ── Fragment setup ────────────────────────────────────────────────────────
     private fun setupFragments() {
         supportFragmentManager.beginTransaction()
             .add(R.id.fragment_container, homeFragment, "home")
@@ -154,10 +217,10 @@ class MainActivity : AppCompatActivity() {
         activeFragment = fragment
     }
 
+    // ── Player bar ────────────────────────────────────────────────────────────
     private fun setupPlayerBar() {
         observePlayback()
         setupPlayerBarGestures()
-
         binding.playerBar.btnPlayPause.setOnClickListener { viewModel.togglePlayPause() }
         binding.playerBar.btnNext.setOnClickListener { viewModel.playNext() }
     }
@@ -181,13 +244,11 @@ class MainActivity : AppCompatActivity() {
                 }.start()
             }
         }
-
         viewModel.isPlaying.observe(this) { playing ->
             binding.playerBar.btnPlayPause.setImageResource(
                 if (playing) R.drawable.ic_pause else R.drawable.ic_play_arrow
             )
         }
-
         viewModel.currentPosition.observe(this) { pos ->
             val duration = viewModel.duration.value ?: 0L
             if (duration > 0) {
@@ -196,7 +257,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun loadPlayerBarArtWithPalette(song: com.oxoghost.hexaplayer.data.Song) {
+    private fun loadPlayerBarArtWithPalette(song: Song) {
         val uri = SongAdapter.artUri(song)
         imageLoader.enqueue(
             ImageRequest.Builder(this)
@@ -258,14 +319,12 @@ class MainActivity : AppCompatActivity() {
                     }
                     return false
                 }
-
                 override fun onSingleTapUp(e: MotionEvent): Boolean {
                     if (viewModel.currentSong.value != null) openFullscreenPlayer()
                     return true
                 }
             }
         )
-
         binding.playerBar.root.setOnTouchListener { v, event ->
             gestureDetector.onTouchEvent(event)
             v.onTouchEvent(event)
@@ -277,7 +336,6 @@ class MainActivity : AppCompatActivity() {
         val content = binding.playerBar.contentRow
         val dir = if (toLeft) -1f else 1f
         val offset = binding.playerBar.root.width.toFloat().coerceAtLeast(80f) * 0.35f
-
         content.animate()
             .translationX(dir * offset)
             .alpha(0f)
@@ -285,11 +343,7 @@ class MainActivity : AppCompatActivity() {
             .withEndAction {
                 onSwipe()
                 content.translationX = -dir * offset
-                content.animate()
-                    .translationX(0f)
-                    .alpha(1f)
-                    .setDuration(200)
-                    .start()
+                content.animate().translationX(0f).alpha(1f).setDuration(200).start()
             }
             .start()
     }
@@ -303,6 +357,7 @@ class MainActivity : AppCompatActivity() {
             .commit()
     }
 
+    // ── Permissions ───────────────────────────────────────────────────────────
     private fun hasAudioPermission(): Boolean {
         val perm = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
             Manifest.permission.READ_MEDIA_AUDIO
@@ -330,5 +385,118 @@ class MainActivity : AppCompatActivity() {
 
     private fun setupPermissionView() {
         binding.btnGrantPermission.setOnClickListener { requestAudioPermission() }
+    }
+
+    // ── Update banner ─────────────────────────────────────────────────────────
+
+    private fun setupUpdateBanner() {
+        binding.btnUpdateDismiss.setOnClickListener {
+            binding.updateBanner.animate()
+                .translationY(binding.updateBanner.height.toFloat())
+                .setDuration(220)
+                .withEndAction { binding.updateBanner.visibility = View.GONE }
+                .start()
+        }
+        binding.btnUpdateInstall.setOnClickListener {
+            val info = pendingUpdateInfo ?: return@setOnClickListener
+            if (info.downloadUrl.endsWith(".apk", ignoreCase = true)) {
+                downloadAndInstall(info.downloadUrl, info.latestVersion)
+            } else {
+                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(info.downloadUrl)))
+            }
+        }
+    }
+
+    /** Show the update banner (called from background check or SettingsFragment). */
+    fun showUpdateBanner(info: UpdateInfo) {
+        pendingUpdateInfo = info
+        val isApk = info.downloadUrl.endsWith(".apk", ignoreCase = true)
+        binding.tvUpdateBannerText.text = getString(R.string.update_available_label, info.latestVersion)
+        binding.btnUpdateInstall.text =
+            if (isApk) getString(R.string.update_install) else getString(R.string.update_download)
+        if (binding.updateBanner.visibility == View.VISIBLE) return
+        binding.updateBanner.translationY = 0f  // will be set in post once height is known
+        binding.updateBanner.visibility = View.VISIBLE
+        binding.updateBanner.post {
+            binding.updateBanner.translationY = binding.updateBanner.height.toFloat()
+            binding.updateBanner.animate().translationY(0f).setDuration(280).start()
+        }
+    }
+
+    // ── In-app APK download + install ─────────────────────────────────────────
+
+    private fun downloadAndInstall(url: String, version: String) {
+        // Check that HexaPlayer is allowed to install packages (minSdk=27 >= O so always applies)
+        if (!packageManager.canRequestPackageInstalls()) {
+            Snackbar.make(
+                binding.root,
+                getString(R.string.update_install_permission),
+                Snackbar.LENGTH_LONG
+            ).setAction("Settings") {
+                startActivity(
+                    Intent(
+                        Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                        Uri.parse("package:$packageName")
+                    )
+                )
+            }.show()
+            return
+        }
+
+        // Update banner to "Downloading…" state
+        binding.tvUpdateBannerText.text = getString(R.string.update_downloading, version)
+        binding.btnUpdateInstall.isEnabled = false
+
+        // Save to app-specific external dir — no storage permission needed on any API level,
+        // and File.exists() works reliably (avoids scoped storage issues with public Downloads).
+        val apkFile = java.io.File(getExternalFilesDir(null), "HexaPlayer-$version.apk")
+        if (apkFile.exists()) apkFile.delete()
+
+        val request = DownloadManager.Request(Uri.parse(url))
+            .setTitle("HexaPlayer v$version")
+            .setDescription(getString(R.string.update_downloading, version))
+            .setMimeType("application/vnd.android.package-archive")
+            .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+            .setDestinationUri(android.net.Uri.fromFile(apkFile))
+
+        val dm = getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+        pendingDownloadId = dm.enqueue(request)
+    }
+
+    private fun startInstall(@Suppress("UNUSED_PARAMETER") apkUri: Uri) {
+        val version = pendingUpdateInfo?.latestVersion ?: return
+        // Reset banner
+        binding.tvUpdateBannerText.text =
+            getString(R.string.update_available_label, version)
+        binding.btnUpdateInstall.isEnabled = true
+
+        val file = java.io.File(getExternalFilesDir(null), "HexaPlayer-$version.apk")
+        if (!file.exists()) return
+
+        val contentUri = androidx.core.content.FileProvider.getUriForFile(
+            this,
+            "$packageName.fileprovider",
+            file
+        )
+
+        startActivity(
+            Intent(Intent.ACTION_VIEW)
+                .setDataAndType(contentUri, "application/vnd.android.package-archive")
+                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        )
+    }
+
+    // ── Background update check ───────────────────────────────────────────────
+
+    /** Checks GitHub releases on every app open; shows the bottom banner if an update is found. */
+    private fun checkForUpdatesInBackground() {
+        lifecycleScope.launch(Dispatchers.IO) {
+            val info = UpdateRepository().checkForUpdate() ?: return@launch
+            if (!UpdateRepository.isNewerVersion(BuildConfig.VERSION_NAME, info.latestVersion)) return@launch
+            withContext(Dispatchers.Main) {
+                if (!isFinishing && !isDestroyed) showUpdateBanner(info)
+            }
+        }
     }
 }

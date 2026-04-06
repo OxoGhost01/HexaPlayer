@@ -345,13 +345,15 @@ class PlayerFragment : Fragment() {
         Palette.from(bitmap).generate { palette ->
             if (_binding == null) return@generate
             val bgColor = ContextCompat.getColor(requireContext(), R.color.colorBackground)
-            val swatch = palette?.darkVibrantSwatch
-                ?: palette?.vibrantSwatch
-                ?: palette?.darkMutedSwatch
+            val swatch = palette?.vibrantSwatch
+                ?: palette?.lightVibrantSwatch
+                ?: palette?.darkVibrantSwatch
+                ?: palette?.lightMutedSwatch
+                ?: palette?.mutedSwatch
                 ?: palette?.dominantSwatch
             if (swatch != null) {
-                val topColor = ColorUtils.blendARGB(swatch.rgb, bgColor, 0.30f)
-                val midColor = ColorUtils.blendARGB(swatch.rgb, bgColor, 0.68f)
+                val topColor = ColorUtils.blendARGB(swatch.rgb, bgColor, 0.08f)
+                val midColor = ColorUtils.blendARGB(swatch.rgb, bgColor, 0.52f)
                 binding.root.background = GradientDrawable(
                     GradientDrawable.Orientation.TOP_BOTTOM,
                     intArrayOf(topColor, midColor, bgColor)

@@ -22,3 +22,5 @@ app/release/
 keystore.properties
 
 google-services.json
+
+memory/

@@ -12,6 +12,7 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <application
         android:name=".HexaPlayerApp"
@@ -24,6 +25,11 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.HexaPlayer">
 
+        <!-- Android Auto -->
+        <meta-data
+            android:name="com.google.android.gms.car.application"
+            android:resource="@xml/automotive_app_desc"/>
+
         <activity
             android:name=".ui.MainActivity"
             android:exported="true"
@@ -34,14 +40,55 @@
             </intent-filter>
         </activity>
 
+        <!-- Music service — MediaLibraryService for Auto + MediaSessionService for normal use -->
         <service
             android:name=".service.MusicService"
             android:foregroundServiceType="mediaPlayback"
             android:exported="true">
             <intent-filter>
-                <action android:name="androidx.media3.session.MediaSessionService" />
+                <action android:name="androidx.media3.session.MediaLibraryService" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.media.browse.MediaBrowserService" />
             </intent-filter>
         </service>
+
+        <!-- Widget: 4×1 -->
+        <receiver
+            android:name=".widget.HexaWidget4x1"
+            android:exported="true"
+            android:label="@string/widget_4x1_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/appwidget_4x1_info"/>
+        </receiver>
+
+        <!-- Widget: 5×1 -->
+        <receiver
+            android:name=".widget.HexaWidget5x1"
+            android:exported="true"
+            android:label="@string/widget_5x1_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/appwidget_5x1_info"/>
+        </receiver>
+
+        <!-- FileProvider for sharing downloaded APKs with the package installer -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
 
     </application>
 

@@ -10,15 +10,18 @@ A **free**, open-source music player for Android.
 
 - **Browse** your library by Songs, Albums, Artists, Playlists, or Folders
 - **Full-screen player** with seekbar, shuffle, repeat, and queue view
-- **Queue management** — Play Next, Add to Queue, reorder with drag-and-drop; clicking a song queues the rest of the album automatically
-- **Playlists** — create with a custom cover image, add/remove songs
+- **Queue management** : Play Next, Add to Queue, reorder with drag-and-drop; clicking a song queues the rest of the album automatically
+- **Playlists** : create with a custom cover image, add/remove songs
 - **Search & sort** across all views
-- **Equaliser** — 10-band EQ, bass boost, virtualizer, loudness enhancer, and reverb
-- **Sleep timer** — stop playback after a preset time (15 / 30 / 45 / 60 min) or a custom duration (10 s – 10 h)
-- **Lyrics** — synced (LRC) and plain lyrics via [LRCLIB](https://lrclib.net), displayed in the full-screen player
-- **Song metadata editing** — edit title, artist, and album directly from the 3-dot menu
-- **Downloader** — download songs directly in the app by title, style, or artist
-- **Accent themes** — 6 color presets to match your style
+- **Equaliser** : 10-band EQ, bass boost, virtualizer, loudness enhancer, and reverb
+- **Sleep timer** : stop playback after a preset time (15 / 30 / 45 / 60 min) or a custom duration (10 s – 10 h)
+- **Lyrics** : synced (LRC) and plain lyrics via [LRCLIB](https://lrclib.net), displayed in the full-screen player
+- **Song metadata editing** : edit title, artist, and album directly from the 3-dot menu
+- **Downloader** : download songs directly in the app by title, style, or artist
+- **Android Auto** : full media browser (Songs, Albums, Artists, Playlists, Folders) with voice search
+- **Widgets** : 4×1 and 5×1 home-screen widgets with album art and playback controls
+- **Auto-updates** : in-app update checker; notifies you when a new version is available
+- **Accent themes** : 6 color presets to match your style
 
 ## Screenshots
 
@@ -32,12 +35,10 @@ A **free**, open-source music player for Android.
 
 ## Planned Features
 
-- **Android Auto** — control playback from your car
-- **Auto-updates** — no more manual updates
-- **Widgets** — add a widget to your home screen
 - **Shazam** integration
-- **Discord Richpresence** integration (because why not)
-- **Wrapped** — a resume of the year
+- **Discord Rich Presence** integration (because why not)
+- **Wrapped** : a resume of the year
+- **New UI** (+ more personalization options)
 
 ## Tech Stack
 
@@ -48,7 +49,7 @@ A **free**, open-source music player for Android.
 | Media | Media3 ExoPlayer + MediaSession |
 | Image loading | Coil 2.7.0 |
 | Persistence | SharedPreferences + Gson |
-| Architecture | MVVM — ViewModel + LiveData + Repository |
+| Architecture | MVVM - ViewModel + LiveData + Repository |
 
 ## Requirements
 
@@ -59,7 +60,7 @@ A **free**, open-source music player for Android.
 
 1. Clone the repo
 2. Open in Android Studio (Hedgehog or newer)
-3. `Build → Make Project` — no extra setup needed
+3. `Build → Make Project` ; no extra setup needed
 
 ```bash
 git clone https://github.com/OxoGhost01/HexaPlayer.git
@@ -67,4 +68,4 @@ git clone https://github.com/OxoGhost01/HexaPlayer.git
 
 ## License
 
-[Non-Commercial License](LICENSE) — free to use and modify for any non-commercial purpose.
+[Non-Commercial License](LICENSE) - free to use and modify for any non-commercial purpose.
