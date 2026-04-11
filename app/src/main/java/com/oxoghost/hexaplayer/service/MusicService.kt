@@ -14,6 +14,7 @@ import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.session.CommandButton
 import androidx.media3.session.LibraryResult
 import androidx.media3.session.MediaLibraryService
 import androidx.media3.session.MediaSession
@@ -22,6 +23,7 @@ import com.google.common.collect.ImmutableList
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.SettableFuture
+import com.oxoghost.hexaplayer.R
 import com.oxoghost.hexaplayer.repository.MusicRepository
 import com.oxoghost.hexaplayer.repository.PlaylistRepository
 import com.oxoghost.hexaplayer.widget.WidgetController
@@ -63,10 +65,12 @@ class MusicService : MediaLibraryService() {
         }
     }
 
-    // ── Player listener → keep widgets in sync ────────────────────────────────
+    // ── Player listener → keep widgets in sync + update AA custom layout ─────
     private val playerListener = object : Player.Listener {
         override fun onIsPlayingChanged(isPlaying: Boolean) = pushWidgetState()
         override fun onMediaItemTransition(item: MediaItem?, reason: Int) = pushWidgetState()
+        override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) = updateCustomLayout()
+        override fun onRepeatModeChanged(repeatMode: Int) = updateCustomLayout()
     }
 
     private fun pushWidgetState() {
@@ -95,7 +99,9 @@ class MusicService : MediaLibraryService() {
         }
         audioSessionId = player.audioSessionId
         player.addListener(playerListener)
-        mediaLibrarySession = MediaLibrarySession.Builder(this, player, LibraryCallback()).build()
+        mediaLibrarySession = MediaLibrarySession.Builder(this, player, LibraryCallback())
+            .setCustomLayout(buildCustomLayout(player))
+            .build()
         registerReceiver(noisyReceiver, IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY))
     }
 
@@ -137,6 +143,38 @@ class MusicService : MediaLibraryService() {
         audioSessionId = 0
         ioExecutor.shutdown()
         super.onDestroy()
+    }
+
+    // ── Android Auto custom layout (shuffle + repeat) ─────────────────────────
+
+    private fun buildCustomLayout(player: Player): List<CommandButton> = listOf(
+        CommandButton.Builder(
+            if (player.shuffleModeEnabled) CommandButton.ICON_SHUFFLE_ON
+            else CommandButton.ICON_SHUFFLE_OFF
+        )
+            .setPlayerCommand(Player.COMMAND_SET_SHUFFLE_MODE)
+            .setDisplayName("Shuffle")
+            .setIconResId(R.drawable.ic_shuffle)
+            .build(),
+        CommandButton.Builder(
+            when (player.repeatMode) {
+                Player.REPEAT_MODE_ONE -> CommandButton.ICON_REPEAT_ONE
+                Player.REPEAT_MODE_ALL -> CommandButton.ICON_REPEAT_ALL
+                else                   -> CommandButton.ICON_REPEAT_OFF
+            }
+        )
+            .setPlayerCommand(Player.COMMAND_SET_REPEAT_MODE)
+            .setDisplayName("Repeat")
+            .setIconResId(
+                if (player.repeatMode == Player.REPEAT_MODE_ONE) R.drawable.ic_repeat_one
+                else R.drawable.ic_repeat
+            )
+            .build()
+    )
+
+    private fun updateCustomLayout() {
+        val session = mediaLibrarySession ?: return
+        session.setCustomLayout(buildCustomLayout(session.player))
     }
 
     // ── Android Auto library callback ─────────────────────────────────────────
