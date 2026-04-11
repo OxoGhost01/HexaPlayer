@@ -21,66 +21,9 @@
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:visibility="gone"
-        app:layout_constraintBottom_toTopOf="@+id/update_banner"
+        app:layout_constraintBottom_toTopOf="@+id/bottom_nav"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
-
-    <!-- Update available banner — slides in above the bottom nav when a new version is found -->
-    <LinearLayout
-        android:id="@+id/update_banner"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:paddingStart="16dp"
-        android:paddingEnd="4dp"
-        android:paddingTop="10dp"
-        android:paddingBottom="10dp"
-        android:background="@color/colorSurface"
-        android:elevation="6dp"
-        android:visibility="gone"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintBottom_toTopOf="@+id/bottom_nav">
-
-        <ImageView
-            android:layout_width="18dp"
-            android:layout_height="18dp"
-            android:src="@drawable/ic_download"
-            android:contentDescription="@null"
-            android:layout_marginEnd="10dp"
-            app:tint="?attr/colorPrimary" />
-
-        <TextView
-            android:id="@+id/tv_update_banner_text"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:textColor="@color/colorText"
-            android:textSize="13sp" />
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btn_update_install"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:minHeight="0dp"
-            android:paddingTop="6dp"
-            android:paddingBottom="6dp"
-            android:text="@string/update_install"
-            style="@style/Widget.MaterialComponents.Button.TextButton"
-            android:textColor="?attr/colorPrimary" />
-
-        <ImageButton
-            android:id="@+id/btn_update_dismiss"
-            android:layout_width="36dp"
-            android:layout_height="36dp"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:src="@drawable/ic_close"
-            android:contentDescription="Dismiss"
-            android:padding="8dp"
-            app:tint="@color/colorTextSecondary" />
-
-    </LinearLayout>
 
     <com.google.android.material.bottomnavigation.BottomNavigationView
         android:id="@+id/bottom_nav"

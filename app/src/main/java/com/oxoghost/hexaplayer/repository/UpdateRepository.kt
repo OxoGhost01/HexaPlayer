@@ -4,7 +4,7 @@ import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 
-data class UpdateInfo(val latestVersion: String, val downloadUrl: String)
+data class UpdateInfo(val latestVersion: String, val downloadUrl: String, val changelog: String = "")
 
 class UpdateRepository {
 
@@ -49,6 +49,7 @@ class UpdateRepository {
 
             val tagName = obj.getString("tag_name").removePrefix("v")
             val htmlUrl = obj.getString("html_url")
+            val changelog = obj.optString("body", "")
 
             // Prefer a direct APK asset download URL; fall back to the release page
             val assets = obj.optJSONArray("assets")
@@ -61,7 +62,7 @@ class UpdateRepository {
                 }.firstOrNull()
             } else null
 
-            UpdateInfo(tagName, apkUrl ?: htmlUrl)
+            UpdateInfo(tagName, apkUrl ?: htmlUrl, changelog)
         } catch (_: Exception) {
             null
         }

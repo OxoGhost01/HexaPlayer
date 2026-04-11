@@ -231,7 +231,7 @@ class SettingsFragment : Fragment() {
                     binding.tvUpdateStatus.text =
                         getString(R.string.update_available_label, info.latestVersion)
                     (requireActivity() as? com.oxoghost.hexaplayer.ui.MainActivity)
-                        ?.showUpdateBanner(info)
+                        ?.showUpdateScreen(info)
                 } else {
                     binding.tvUpdateStatus.text = getString(R.string.update_up_to_date)
                 }

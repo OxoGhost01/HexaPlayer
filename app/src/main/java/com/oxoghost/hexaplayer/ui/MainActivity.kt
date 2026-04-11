@@ -46,6 +46,7 @@ import com.oxoghost.hexaplayer.ui.equalizer.EqualizerFragment
 import com.oxoghost.hexaplayer.ui.home.HomeFragment
 import com.oxoghost.hexaplayer.ui.player.PlayerFragment
 import com.oxoghost.hexaplayer.ui.settings.SettingsFragment
+import com.oxoghost.hexaplayer.ui.update.UpdateFragment
 import com.oxoghost.hexaplayer.util.themeColor
 import com.oxoghost.hexaplayer.viewmodel.MusicViewModel
 import kotlinx.coroutines.Dispatchers
@@ -120,7 +121,6 @@ class MainActivity : AppCompatActivity() {
 
         setupBottomNav()
         setupPlayerBar()
-        setupUpdateBanner()
         setupPermissionView()
 
         // RECEIVER_EXPORTED is required: DownloadManager is a system process and its broadcast
@@ -387,39 +387,26 @@ class MainActivity : AppCompatActivity() {
         binding.btnGrantPermission.setOnClickListener { requestAudioPermission() }
     }
 
-    // ── Update banner ─────────────────────────────────────────────────────────
+    // ── Update screen ─────────────────────────────────────────────────────────
 
-    private fun setupUpdateBanner() {
-        binding.btnUpdateDismiss.setOnClickListener {
-            binding.updateBanner.animate()
-                .translationY(binding.updateBanner.height.toFloat())
-                .setDuration(220)
-                .withEndAction { binding.updateBanner.visibility = View.GONE }
-                .start()
-        }
-        binding.btnUpdateInstall.setOnClickListener {
-            val info = pendingUpdateInfo ?: return@setOnClickListener
-            if (info.downloadUrl.endsWith(".apk", ignoreCase = true)) {
-                downloadAndInstall(info.downloadUrl, info.latestVersion)
-            } else {
-                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(info.downloadUrl)))
-            }
-        }
+    /** Opens the full-screen update notification (called from background check or SettingsFragment). */
+    fun showUpdateScreen(info: UpdateInfo) {
+        pendingUpdateInfo = info
+        if (supportFragmentManager.findFragmentByTag("update") != null) return
+        supportFragmentManager.beginTransaction()
+            .setCustomAnimations(R.anim.slide_up, R.anim.slide_down, R.anim.slide_up, R.anim.slide_down)
+            .add(android.R.id.content, UpdateFragment.newInstance(info), "update")
+            .addToBackStack("update")
+            .commit()
     }
 
-    /** Show the update banner (called from background check or SettingsFragment). */
-    fun showUpdateBanner(info: UpdateInfo) {
+    /** Called by UpdateFragment when the user taps the update button. */
+    fun startUpdate(info: UpdateInfo) {
         pendingUpdateInfo = info
-        val isApk = info.downloadUrl.endsWith(".apk", ignoreCase = true)
-        binding.tvUpdateBannerText.text = getString(R.string.update_available_label, info.latestVersion)
-        binding.btnUpdateInstall.text =
-            if (isApk) getString(R.string.update_install) else getString(R.string.update_download)
-        if (binding.updateBanner.visibility == View.VISIBLE) return
-        binding.updateBanner.translationY = 0f  // will be set in post once height is known
-        binding.updateBanner.visibility = View.VISIBLE
-        binding.updateBanner.post {
-            binding.updateBanner.translationY = binding.updateBanner.height.toFloat()
-            binding.updateBanner.animate().translationY(0f).setDuration(280).start()
+        if (info.downloadUrl.endsWith(".apk", ignoreCase = true)) {
+            downloadAndInstall(info.downloadUrl, info.latestVersion)
+        } else {
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(info.downloadUrl)))
         }
     }
 
@@ -443,10 +430,6 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        // Update banner to "Downloading…" state
-        binding.tvUpdateBannerText.text = getString(R.string.update_downloading, version)
-        binding.btnUpdateInstall.isEnabled = false
-
         // Save to app-specific external dir — no storage permission needed on any API level,
         // and File.exists() works reliably (avoids scoped storage issues with public Downloads).
         val apkFile = java.io.File(getExternalFilesDir(null), "HexaPlayer-$version.apk")
@@ -465,11 +448,6 @@ class MainActivity : AppCompatActivity() {
 
     private fun startInstall(@Suppress("UNUSED_PARAMETER") apkUri: Uri) {
         val version = pendingUpdateInfo?.latestVersion ?: return
-        // Reset banner
-        binding.tvUpdateBannerText.text =
-            getString(R.string.update_available_label, version)
-        binding.btnUpdateInstall.isEnabled = true
-
         val file = java.io.File(getExternalFilesDir(null), "HexaPlayer-$version.apk")
         if (!file.exists()) return
 
@@ -489,13 +467,13 @@ class MainActivity : AppCompatActivity() {
 
     // ── Background update check ───────────────────────────────────────────────
 
-    /** Checks GitHub releases on every app open; shows the bottom banner if an update is found. */
+    /** Checks GitHub releases on every app open; shows the update screen if a newer version is found. */
     private fun checkForUpdatesInBackground() {
         lifecycleScope.launch(Dispatchers.IO) {
             val info = UpdateRepository().checkForUpdate() ?: return@launch
             if (!UpdateRepository.isNewerVersion(BuildConfig.VERSION_NAME, info.latestVersion)) return@launch
             withContext(Dispatchers.Main) {
-                if (!isFinishing && !isDestroyed) showUpdateBanner(info)
+                if (!isFinishing && !isDestroyed) showUpdateScreen(info)
             }
         }
     }

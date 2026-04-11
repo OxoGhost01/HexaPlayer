@@ -179,9 +179,13 @@
     <string name="update_dialog_title">Update available</string>
     <string name="update_dialog_message">Version %s is available. Download now?</string>
     <string name="update_download">Download</string>
-    <string name="update_install">Install</string>
+    <string name="update_install">Install update</string>
     <string name="update_downloading">Downloading v%s…</string>
     <string name="update_install_permission">Allow HexaPlayer to install apps in Settings first</string>
+    <string name="update_new_version">New version available!</string>
+    <string name="update_version_label">v%s</string>
+    <string name="update_not_now">Not now</string>
+    <string name="update_no_changelog">No release notes available.</string>
 
     <!-- Widgets -->
     <string name="widget_4x1_label">HexaPlayer (4×1)</string>
