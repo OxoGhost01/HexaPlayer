@@ -6,6 +6,8 @@ A **free**, open-source music player for Android.
 ![GitHub Repo stars](https://img.shields.io/github/stars/oxoghost01/hexaplayer?style=for-the-badge)
 ![GitHub Downloads (all assets, latest release)](https://img.shields.io/github/downloads/oxoghost01/hexaplayer/latest/total?style=for-the-badge)
 
+[![Poll](https://markpoll.oxoghost.dev/p/01KRG9WFR6XT7QR2DQ6477TPN7/svg)](https://markpoll.oxoghost.dev/p/01KRG9WFR6XT7QR2DQ6477TPN7)
+
 ## Features
 
 - **Browse** your library by Songs, Albums, Artists, Playlists, or Folders
