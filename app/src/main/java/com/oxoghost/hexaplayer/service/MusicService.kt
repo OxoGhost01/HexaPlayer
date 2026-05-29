@@ -7,6 +7,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.media.AudioManager
 import android.net.Uri
+import android.os.Bundle
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
@@ -18,7 +19,9 @@ import androidx.media3.session.CommandButton
 import androidx.media3.session.LibraryResult
 import androidx.media3.session.MediaLibraryService
 import androidx.media3.session.MediaSession
+import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionError
+import androidx.media3.session.SessionResult
 import com.google.common.collect.ImmutableList
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
@@ -43,6 +46,11 @@ class MusicService : MediaLibraryService() {
     private var lastBrowseParentId: String = ""
     private var lastBrowseItems: List<String> = emptyList()
 
+    // Internal shuffle state — owned here so both the phone app and Android Auto
+    // drive the SAME shuffler (a manual reorder of upcoming items). ExoPlayer's own
+    // shuffleModeEnabled is always kept false so it never re-orders on top of ours.
+    private var shuffleOn = false
+
     companion object {
         var audioSessionId: Int = 0
             private set
@@ -54,6 +62,12 @@ class MusicService : MediaLibraryService() {
         const val TAB_ARTISTS   = "__artists__"
         const val TAB_PLAYLISTS = "__playlists__"
         const val TAB_FOLDERS   = "__folders__"
+
+        // Custom session command + session-extras keys for the shared shuffler
+        const val CMD_SHUFFLE          = "com.oxoghost.hexaplayer.action.SHUFFLE"
+        const val EXTRA_SHUFFLE_ON     = "hexa.shuffle_on"
+        const val EXTRA_QUEUE_REORDERED = "hexa.queue_reordered"
+        const val EXTRA_FORCE_ON       = "hexa.force_on"
     }
 
     // ── Noisy receiver ────────────────────────────────────────────────────────
@@ -130,7 +144,11 @@ class MusicService : MediaLibraryService() {
         return result
     }
 
-    override fun onTaskRemoved(rootIntent: Intent?) = stopSelf()
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        val player = mediaLibrarySession?.player
+        if (player == null || !player.isPlaying) stopSelf()
+        // Keep service alive if playing — Android Auto may still be using it
+    }
 
     override fun onDestroy() {
         unregisterReceiver(noisyReceiver)
@@ -149,10 +167,12 @@ class MusicService : MediaLibraryService() {
 
     private fun buildCustomLayout(player: Player): List<CommandButton> = listOf(
         CommandButton.Builder(
-            if (player.shuffleModeEnabled) CommandButton.ICON_SHUFFLE_ON
+            if (shuffleOn) CommandButton.ICON_SHUFFLE_ON
             else CommandButton.ICON_SHUFFLE_OFF
         )
-            .setPlayerCommand(Player.COMMAND_SET_SHUFFLE_MODE)
+            // Custom command (NOT COMMAND_SET_SHUFFLE_MODE) so taps run our internal
+            // shuffler instead of ExoPlayer's built-in random ordering.
+            .setSessionCommand(SessionCommand(CMD_SHUFFLE, Bundle.EMPTY))
             .setDisplayName("Shuffle")
             .setIconResId(R.drawable.ic_shuffle)
             .build(),
@@ -177,8 +197,97 @@ class MusicService : MediaLibraryService() {
         session.setCustomLayout(buildCustomLayout(session.player))
     }
 
+    /**
+     * The internal shuffler — mirrors the phone app's behavior:
+     * - Turning ON shuffles only the upcoming context items (everything after the
+     *   current track and the user-queue block), leaving the current track and the
+     *   user queue untouched.
+     * - Turning OFF just flips the flag (it does not restore the original order),
+     *   matching the existing phone-app toggle.
+     *
+     * ExoPlayer's own shuffleModeEnabled is forced false so it never double-shuffles.
+     */
+    private fun performInternalShuffle() {
+        val player = mediaLibrarySession?.player
+        if (player == null) return
+
+        if (shuffleOn) {
+            shuffleOn = false
+            afterShuffleChanged(reordered = false)
+            return
+        }
+
+        var reordered = false
+        val count = player.mediaItemCount
+        val cur = player.currentMediaItemIndex
+        if (cur >= 0 && count > 0) {
+            // Skip the contiguous user-queue block that sits right after the current item.
+            var from = cur + 1
+            while (from < count && player.getMediaItemAt(from).mediaId.startsWith("uq:")) from++
+            if (from < count) {
+                val upcoming = ArrayList<MediaItem>(count - from)
+                for (i in from until count) upcoming.add(player.getMediaItemAt(i))
+                upcoming.shuffle()
+                player.removeMediaItems(from, count)
+                player.addMediaItems(upcoming)
+                reordered = true
+            }
+        }
+        player.shuffleModeEnabled = false
+        shuffleOn = true
+        afterShuffleChanged(reordered)
+    }
+
+    /** Refresh the AA icon and notify controllers (phone app) of the new shuffle state. */
+    private fun afterShuffleChanged(reordered: Boolean) {
+        updateCustomLayout()
+        mediaLibrarySession?.setSessionExtras(
+            Bundle().apply {
+                putBoolean(EXTRA_SHUFFLE_ON, shuffleOn)
+                putBoolean(EXTRA_QUEUE_REORDERED, reordered)
+            }
+        )
+    }
+
     // ── Android Auto library callback ─────────────────────────────────────────
     private inner class LibraryCallback : MediaLibrarySession.Callback {
+
+        // Send the current custom layout to every new controller (phone app, AA, etc.)
+        // so shuffle/repeat icons always reflect the real state on connect.
+        // Also expose the custom shuffle command so the buttons are tappable everywhere.
+        override fun onConnect(
+            session: MediaSession,
+            controller: MediaSession.ControllerInfo
+        ): MediaSession.ConnectionResult {
+            val sessionCommands =
+                MediaSession.ConnectionResult.DEFAULT_SESSION_AND_LIBRARY_COMMANDS.buildUpon()
+                    .add(SessionCommand(CMD_SHUFFLE, Bundle.EMPTY))
+                    .build()
+            return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
+                .setAvailableSessionCommands(sessionCommands)
+                .setCustomLayout(buildCustomLayout(session.player))
+                .build()
+        }
+
+        // Single entry point for shuffle from ANY surface (phone app or Android Auto).
+        override fun onCustomCommand(
+            session: MediaSession,
+            controller: MediaSession.ControllerInfo,
+            customCommand: SessionCommand,
+            args: Bundle
+        ): ListenableFuture<SessionResult> {
+            if (customCommand.customAction == CMD_SHUFFLE) {
+                if (args.containsKey(EXTRA_FORCE_ON)) {
+                    // Caller already arranged the order (e.g. "Shuffle all"); just set state.
+                    shuffleOn = args.getBoolean(EXTRA_FORCE_ON)
+                    afterShuffleChanged(reordered = false)
+                } else {
+                    performInternalShuffle()
+                }
+                return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+            }
+            return super.onCustomCommand(session, controller, customCommand, args)
+        }
 
         override fun onGetLibraryRoot(
             session: MediaLibrarySession,

@@ -18,6 +18,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
+import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionToken
 import com.oxoghost.hexaplayer.data.Album
 import com.oxoghost.hexaplayer.data.Artist
@@ -177,12 +178,27 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    // Receives session-level events from the service. The shared shuffler lives in the
+    // service, so when shuffle is toggled from EITHER the phone app or Android Auto the
+    // service broadcasts the new state here, keeping both surfaces in sync.
+    private val controllerListener = object : MediaController.Listener {
+        override fun onExtrasChanged(controller: MediaController, extras: Bundle) {
+            if (!extras.containsKey(MusicService.EXTRA_SHUFFLE_ON)) return
+            _shuffleMode.postValue(extras.getBoolean(MusicService.EXTRA_SHUFFLE_ON))
+            if (extras.getBoolean(MusicService.EXTRA_QUEUE_REORDERED, false)) {
+                rebuildQueueFromPlayer()
+            }
+        }
+    }
+
     fun connectToService() {
         val token = SessionToken(
             getApplication(),
             ComponentName(getApplication(), MusicService::class.java)
         )
-        val future = MediaController.Builder(getApplication(), token).buildAsync()
+        val future = MediaController.Builder(getApplication(), token)
+            .setListener(controllerListener)
+            .buildAsync()
         future.addListener({
             try {
                 controller = future.get()
@@ -267,25 +283,14 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun playQueueShuffled(songs: List<Song>) {
-        val ctrl = controller ?: return
-        val shuffled = songs.shuffled()
-        contextQueue = shuffled
-        contextCurrentIndex = 0
-        uqEntries.clear()
-        lastPlayedMediaId = ""
-        _userQueueLive.postValue(emptyList())
-        _isPlayingFromUserQueue.value = false
-        _shuffleMode.value = true
-
-        val items = shuffled.mapIndexed { idx, song -> song.toCtxMediaItem(idx) }
-        ctrl.setMediaItems(items, 0, 0L)
-        ctrl.shuffleModeEnabled = false
-        ctrl.prepare()
-        ctrl.play()
-
-        _contextQueueLive.postValue(shuffled)
-        _currentQueueIndex.value = 0
-        _currentSong.value = shuffled.firstOrNull()
+        if (songs.isEmpty()) return
+        // Order is randomized here; we then tell the service shuffle is ON (force flag,
+        // no extra reorder) so the icon state stays consistent across phone app and AA.
+        playQueue(songs.shuffled(), 0)
+        controller?.sendCustomCommand(
+            SessionCommand(MusicService.CMD_SHUFFLE, Bundle.EMPTY),
+            Bundle().apply { putBoolean(MusicService.EXTRA_FORCE_ON, true) }
+        )
     }
 
     fun addToQueueNext(song: Song) {
@@ -400,32 +405,65 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     fun seekTo(positionMs: Long) { controller?.seekTo(positionMs) }
 
     fun toggleShuffle() {
+        // Shuffle is owned by the service so the phone app and Android Auto share one
+        // implementation. The service reorders the queue and broadcasts the new state
+        // back via controllerListener.onExtrasChanged.
+        controller?.sendCustomCommand(
+            SessionCommand(MusicService.CMD_SHUFFLE, Bundle.EMPTY),
+            Bundle.EMPTY
+        )
+    }
+
+    /**
+     * Rebuilds the ViewModel's queue model from the player's current timeline.
+     * Called after the service shuffles the queue (from either surface) so the
+     * QueueFragment and queue logic stay in sync with the real playback order.
+     */
+    private fun rebuildQueueFromPlayer() {
         val ctrl = controller ?: return
-        val isShuffled = _shuffleMode.value ?: false
+        val all = _songs.value
+        if (all.isNullOrEmpty()) return
+        val byUri = all.associateBy { it.uri }
+        val byId  = all.associateBy { it.id }
 
-        if (!isShuffled) {
-            val remaining = contextQueue.drop(contextCurrentIndex + 1).toMutableList()
-            remaining.shuffle()
-            contextQueue = contextQueue.take(contextCurrentIndex + 1) + remaining
-            _contextQueueLive.postValue(contextQueue)
+        val count = ctrl.mediaItemCount
+        val cur   = ctrl.currentMediaItemIndex.coerceAtLeast(0)
+        val newCtx = mutableListOf<Song>()
+        val newUq  = mutableListOf<UQEntry>()
+        var ctxBeforeCur = 0
 
-            val removeFrom = contextCurrentIndex + 1 + uqEntries.size
-            val totalCount = ctrl.mediaItemCount
-            if (removeFrom < totalCount) {
-                ctrl.removeMediaItems(removeFrom, totalCount)
+        for (i in 0 until count) {
+            val item = ctrl.getMediaItemAt(i)
+            val song = resolvePlayerSong(item, byUri, byId) ?: continue
+            if (item.mediaId.startsWith("uq:")) {
+                newUq.add(UQEntry(song, item.mediaId))
+            } else {
+                if (i < cur) ctxBeforeCur++
+                newCtx.add(song)
             }
-
-            val newCtxItems = remaining.mapIndexed { i, s ->
-                s.toCtxMediaItem(contextCurrentIndex + 1 + i)
-            }
-            if (newCtxItems.isNotEmpty()) {
-                ctrl.addMediaItems(ctrl.mediaItemCount, newCtxItems)
-            }
-
-            _shuffleMode.postValue(true)
-        } else {
-            _shuffleMode.postValue(false)
         }
+
+        contextQueue = newCtx
+        contextCurrentIndex = if (newCtx.isEmpty()) 0 else ctxBeforeCur.coerceIn(0, newCtx.size - 1)
+        uqEntries.clear()
+        uqEntries.addAll(newUq)
+
+        _contextQueueLive.postValue(newCtx)
+        _userQueueLive.postValue(newUq.map { it.song })
+        _currentQueueIndex.postValue(contextCurrentIndex)
+    }
+
+    private fun resolvePlayerSong(
+        item: MediaItem,
+        byUri: Map<Uri, Song>,
+        byId: Map<Long, Song>
+    ): Song? {
+        val mid = item.mediaId
+        if (mid.startsWith("song:")) {
+            mid.removePrefix("song:").toLongOrNull()?.let { id -> byId[id]?.let { return it } }
+        }
+        item.localConfiguration?.uri?.let { uri -> byUri[uri]?.let { return it } }
+        return null
     }
 
     fun toggleRepeat() {

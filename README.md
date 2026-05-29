@@ -20,7 +20,7 @@ A **free**, open-source music player for Android.
 - **Lyrics** : synced (LRC) and plain lyrics via [LRCLIB](https://lrclib.net), displayed in the full-screen player
 - **Song metadata editing** : edit title, artist, and album directly from the 3-dot menu
 - **Downloader** : download songs directly in the app by title, style, or artist
-- **Android Auto** : full media browser (Songs, Albums, Artists, Playlists, Folders) with voice search
+- **Android Auto** : full media browser (Songs, Albums, Artists, Playlists, Folders) with voice search; shuffle and repeat behave identically to the phone app
 - **Widgets** : 4×1 and 5×1 home-screen widgets with album art and playback controls
 - **Auto-updates** : in-app update checker; notifies you when a new version is available
 - **Accent themes** : 6 color presets to match your style
