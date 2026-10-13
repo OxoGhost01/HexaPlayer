@@ -13,8 +13,11 @@ The same steps are shown inside the app: **Download tab, Setup guide**.
 
 ## 1. Install Termux
 
-Install Termux from **[F-Droid](https://f-droid.org/packages/com.termux/)** or
-**[GitHub](https://github.com/termux/termux-app/releases)**.
+Install Termux from one of these (same app, pick either):
+
+- **[F-Droid](https://f-droid.org/packages/com.termux/)**: tap **Download APK**.
+- **[GitHub, latest release](https://github.com/termux/termux-app/releases/latest)**:
+  tap the file ending in `universal.apk`.
 
 > ⚠️ **Do not** use the Termux from the Google Play Store, it won't work
 > with this setup.
@@ -50,6 +53,10 @@ connection** (it should say *Connected*), then paste a Spotify link and hit
 **Download** or **Sync**. Press `Ctrl + C` in Termux to stop it.
 
 ## Tips
+
+- **`CANNOT LINK EXECUTABLE "ffmpeg"` during setup:** your Termux packages were
+  out of date. Run the setup command again, it now upgrades everything first and
+  repairs the broken install.
 
 - **Keep it running:** downloads only work while `hexadl` is running in Termux.
   The launcher grabs a wake-lock so the phone won't pause it while the screen is

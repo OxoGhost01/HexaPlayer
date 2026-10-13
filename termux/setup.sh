@@ -17,8 +17,11 @@ export DEBIAN_FRONTEND=noninteractive
 
 echo "==> Installing HexaPlayer downloader (spotDL) in Termux"
 
-echo "==> Updating packages..."
-pkg update "${APT_OPTS[@]}" </dev/null
+echo "==> Upgrading Termux packages..."
+# "pkg update" only refreshes the lists. A full upgrade is needed, otherwise new
+# packages like ffmpeg link against an old libc++ and fail with CANNOT LINK.
+pkg upgrade "${APT_OPTS[@]}" </dev/null
+dpkg --configure -a </dev/null || true
 pkg install "${APT_OPTS[@]}" python python-pip ffmpeg curl \
   build-essential rust cmake ninja </dev/null
 
