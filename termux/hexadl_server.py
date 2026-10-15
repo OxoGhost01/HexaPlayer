@@ -47,7 +47,9 @@ SPOTDL_BIN = os.environ.get("HEXADL_SPOTDL_BIN", "spotdl")
 # down to 128k mp3 (a second lossy pass for no benefit). Override via
 # HEXADL_SPOTDL_ARGS, e.g. "--format mp3 --bitrate 320k", if mp3 is needed
 # for compatibility. Later flags win, so an override replaces this default.
-DEFAULT_ARGS = ["--format", "opus", "--bitrate", "disable"]
+# Two threads instead of spotDL's 4: its threads share one yt-dlp instance and
+# YouTube throttles parallel downloads, which made about 1 track in 4 fail.
+DEFAULT_ARGS = ["--format", "opus", "--bitrate", "disable", "--threads", "2"]
 # Extra CLI args applied to every job, e.g. "--format mp3 --bitrate 320k"
 EXTRA_ARGS = DEFAULT_ARGS + os.environ.get("HEXADL_SPOTDL_ARGS", "").split()
 

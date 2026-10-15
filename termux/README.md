@@ -74,6 +74,9 @@ connection** (it should say *Connected*), then paste a Spotify link and hit
   `export HEXADL_SPOTDL_ARGS="--format mp3 --bitrate 320k"` before running
   `hexadl` (or add it inside `$PREFIX/bin/hexadl`); later flags win over the
   defaults.
+- **Speed:** downloads run 2 at a time (`--threads 2`), which fails far less
+  often than spotDL's default of 4. Failed tracks are retried once
+  automatically. To change it, add e.g. `--threads 4` to `HEXADL_SPOTDL_ARGS`.
 - **Deno:** modern YouTube needs a JS runtime to unlock many tracks. The setup
   script installs it; if some songs fail with a signature/nsig error, run
   `pkg install deno` manually.
