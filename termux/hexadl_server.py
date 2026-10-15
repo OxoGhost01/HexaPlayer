@@ -125,38 +125,49 @@ _FAILED_RE = re.compile(r'^(\w+Error: |Error downloading)| generated an exceptio
 _TOTAL_RE = re.compile(r'Found (\d+) songs', re.IGNORECASE)
 
 
-def _run_job(job: Job, cmd: List[str]) -> None:
+def _run_pass(job: Job, cmd: List[str]) -> int:
+    proc = subprocess.Popen(
+        cmd,
+        cwd=str(job.out_dir),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        bufsize=1,
+        # spotDL wraps its output at the terminal width; keep one message per line
+        env={**os.environ, "COLUMNS": "1000"},
+        start_new_session=True,
+    )
+    job.proc = proc
+    assert proc.stdout is not None
+    for raw in proc.stdout:
+        line = raw.rstrip()
+        if not line:
+            continue
+        job.log_tail.append(line)
+        job.message = line[:200]
+        m = _TOTAL_RE.search(line)
+        if m:
+            job.total = int(m.group(1))
+        if _DONE_RE.match(line):
+            job.done += 1
+            job.last_song_at = time.time()
+        elif _FAILED_RE.search(line):
+            job.done += 1
+            job.failed += 1
+            job.last_song_at = time.time()
+    return proc.wait()
+
+
+def _run_job(job: Job, cmd: List[str], retry_cmd: List[str]) -> None:
     try:
-        proc = subprocess.Popen(
-            cmd,
-            cwd=str(job.out_dir),
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            bufsize=1,
-            # spotDL wraps its output at the terminal width; keep one message per line
-            env={**os.environ, "COLUMNS": "1000"},
-            start_new_session=True,
-        )
-        job.proc = proc
-        assert proc.stdout is not None
-        for raw in proc.stdout:
-            line = raw.rstrip()
-            if not line:
-                continue
-            job.log_tail.append(line)
-            job.message = line[:200]
-            m = _TOTAL_RE.search(line)
-            if m:
-                job.total = int(m.group(1))
-            if _DONE_RE.match(line):
-                job.done += 1
-                job.last_song_at = time.time()
-            elif _FAILED_RE.search(line):
-                job.done += 1
-                job.failed += 1
-                job.last_song_at = time.time()
-        code = proc.wait()
+        code = _run_pass(job, cmd)
+        if code == 0 and job.failed and not job.stop_requested:
+            # Most failures are transient (YouTube throttling, Spotify lookups).
+            # A second pass only retries them: spotDL skips the songs on disk.
+            retrying = job.failed
+            job.done = job.failed = 0
+            job.message = f"Retrying {retrying} failed track(s)..."
+            code = _run_pass(job, retry_cmd)
         if job.stop_requested:
             _collect_files(job, drop_recent=True)
             job.status = "stopped"
@@ -292,14 +303,16 @@ def create_job(req: JobRequest) -> dict:
         else:
             # First run: download everything and create the sync file.
             cmd = [*base, "sync", url, "--save-file", str(sync_file)]
+        retry_cmd = [*base, "sync", str(sync_file)]
         # Remember the human name/url alongside the sync file for /syncs.
         _write_sync_meta(sync_file, url, folder, root)
     else:
         cmd = [*base, "download", url]
+        retry_cmd = cmd
 
     with JOBS_LOCK:
         JOBS[job_id] = job
-    threading.Thread(target=_run_job, args=(job, cmd), daemon=True).start()
+    threading.Thread(target=_run_job, args=(job, cmd, retry_cmd), daemon=True).start()
     return {"id": job_id}
 
 
