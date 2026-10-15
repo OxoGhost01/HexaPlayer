@@ -145,9 +145,12 @@ class MusicService : MediaLibraryService() {
     }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
-        val player = mediaLibrarySession?.player
-        if (player == null || !player.isPlaying) stopSelf()
-        // Keep service alive if playing — Android Auto may still be using it
+        val session = mediaLibrarySession
+        val carConnected = session != null && session.connectedControllers.any {
+            session.isAutoCompanionController(it) || session.isAutomotiveController(it)
+        }
+        // Swiping the app away stops the music, unless a car is still playing it
+        if (!carConnected) pauseAllPlayersAndStopSelf()
     }
 
     override fun onDestroy() {
