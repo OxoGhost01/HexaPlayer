@@ -35,6 +35,9 @@ from pydantic import BaseModel
 # Configuration (all overridable via environment variables)
 # --------------------------------------------------------------------------- #
 
+# Bump when the app needs a newer server; the app asks users to re-run setup below its minimum
+SERVER_VERSION = 2
+
 ROOT = Path(os.environ.get("HEXADL_ROOT", "./music")).resolve()
 # Jobs may write anywhere under shared storage (the app's Music Library folder)
 SHARED = Path(os.environ.get("HEXADL_SHARED", "/storage/emulated/0")).resolve()
@@ -265,7 +268,7 @@ def _spotdl_version() -> str:
 
 @app.get("/health")
 def health(_: None = Depends(require_token)) -> dict:
-    return {"ok": True, "spotdl": _spotdl_version(), "root": str(ROOT)}
+    return {"ok": True, "spotdl": _spotdl_version(), "server": SERVER_VERSION, "root": str(ROOT)}
 
 
 @app.post("/jobs")
