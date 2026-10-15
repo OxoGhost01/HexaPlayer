@@ -22,6 +22,7 @@ import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.widget.addTextChangedListener
 import androidx.fragment.app.Fragment
+import androidx.fragment.app.FragmentManager
 import androidx.fragment.app.activityViewModels
 import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -186,6 +187,7 @@ class HomeFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         requireActivity().onBackPressedDispatcher.addCallback(viewLifecycleOwner, backCallback)
+        parentFragmentManager.addOnBackStackChangedListener(backStackListener)
         setupSpinner()
         setupRecyclerView()
         setupSearch()
@@ -374,9 +376,17 @@ class HomeFragment : Fragment() {
         updateBackCallback()
     }
 
+    // Only handle back while Home is visible and no screen (player, guide...) is on top of it
     private fun updateBackCallback() {
-        backCallback.isEnabled =
-            isSearchVisible || currentDetail != null || folderStack.isNotEmpty()
+        backCallback.isEnabled = !isHidden && parentFragmentManager.backStackEntryCount == 0 &&
+            (isSearchVisible || currentDetail != null || folderStack.isNotEmpty())
+    }
+
+    private val backStackListener = FragmentManager.OnBackStackChangedListener { updateBackCallback() }
+
+    override fun onHiddenChanged(hidden: Boolean) {
+        super.onHiddenChanged(hidden)
+        updateBackCallback()
     }
 
 
@@ -965,6 +975,7 @@ class HomeFragment : Fragment() {
 
     override fun onDestroyView() {
         super.onDestroyView()
+        parentFragmentManager.removeOnBackStackChangedListener(backStackListener)
         _binding = null
     }
 }
