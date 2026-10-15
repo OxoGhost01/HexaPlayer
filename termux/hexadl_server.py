@@ -19,6 +19,7 @@ import json
 import os
 import re
 import shutil
+import signal
 import subprocess
 import threading
 import time
@@ -35,6 +36,8 @@ from pydantic import BaseModel
 # --------------------------------------------------------------------------- #
 
 ROOT = Path(os.environ.get("HEXADL_ROOT", "./music")).resolve()
+# Jobs may write anywhere under shared storage (the app's Music Library folder)
+SHARED = Path(os.environ.get("HEXADL_SHARED", "/storage/emulated/0")).resolve()
 SYNC_DIR = Path(os.environ.get("HEXADL_SYNC_DIR", str(ROOT / ".hexadl" / "syncs"))).resolve()
 TOKEN = os.environ.get("HEXADL_TOKEN", "")  # empty = auth disabled (fine for localhost)
 SPOTDL_BIN = os.environ.get("HEXADL_SPOTDL_BIN", "spotdl")
@@ -69,18 +72,24 @@ def require_token(x_token: Optional[str] = Header(default=None)) -> None:
 # --------------------------------------------------------------------------- #
 
 class Job:
-    def __init__(self, job_id: str, kind: str, url: str, name: str):
+    def __init__(self, job_id: str, kind: str, url: str, name: str, out_dir: Path):
         self.id = job_id
+        self.out_dir = out_dir
         self.kind = kind            # "download" | "sync"
         self.url = url
         self.name = name            # requested folder name ("" = auto)
         self.status = "running"     # running | done | error
         self.done = 0
+        self.failed = 0
         self.total = 0
         self.message = "Starting…"
         self.error: Optional[str] = None
         self.started_at = time.time()
         self.folders: List[str] = []   # top-level folders the job produced
+        self.files: List[str] = []     # absolute paths of the audio files it wrote
+        self.proc: Optional[subprocess.Popen] = None
+        self.stop_requested = False
+        self.last_song_at = time.time()  # when spotDL last reported a finished song
         self.log_tail: List[str] = []
 
     def as_dict(self) -> dict:
@@ -91,10 +100,12 @@ class Job:
             "name": self.name,
             "status": self.status,
             "done": self.done,
+            "failed": self.failed,
             "total": self.total,
             "message": self.message,
             "error": self.error,
             "folders": self.folders,
+            "files": self.files,
             "log": self.log_tail[-8:],
         }
 
@@ -103,7 +114,9 @@ JOBS: Dict[str, Job] = {}
 JOBS_LOCK = threading.Lock()
 
 # spotDL prints one of these per song when it finishes / skips one.
-_DONE_RE = re.compile(r'^(Downloaded|Skipping|Skip |Error downloading)', re.IGNORECASE)
+_DONE_RE = re.compile(r'^(Downloaded|Skipping|Skip )', re.IGNORECASE)
+# Per-song failures, e.g. "AudioProviderError: YT-DLP download error - <url>"
+_FAILED_RE = re.compile(r'^(\w+Error: |Error downloading)')
 _TOTAL_RE = re.compile(r'Found (\d+) songs', re.IGNORECASE)
 
 
@@ -111,12 +124,16 @@ def _run_job(job: Job, cmd: List[str]) -> None:
     try:
         proc = subprocess.Popen(
             cmd,
-            cwd=str(ROOT),
+            cwd=str(job.out_dir),
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
             bufsize=1,
+            # spotDL wraps its output at the terminal width; keep one message per line
+            env={**os.environ, "COLUMNS": "1000"},
+            start_new_session=True,
         )
+        job.proc = proc
         assert proc.stdout is not None
         for raw in proc.stdout:
             line = raw.rstrip()
@@ -129,7 +146,17 @@ def _run_job(job: Job, cmd: List[str]) -> None:
                 job.total = int(m.group(1))
             if _DONE_RE.match(line):
                 job.done += 1
+                job.last_song_at = time.time()
+            elif _FAILED_RE.match(line):
+                job.done += 1
+                job.failed += 1
+                job.last_song_at = time.time()
         code = proc.wait()
+        if job.stop_requested:
+            _collect_files(job, drop_recent=True)
+            job.status = "stopped"
+            job.message = f"Stopped after {job.done - job.failed} track(s)"
+            return
         if code != 0:
             job.status = "error"
             job.error = job.message or f"spotdl exited with code {code}"
@@ -139,20 +166,46 @@ def _run_job(job: Job, cmd: List[str]) -> None:
         job.error = str(exc)
         return
 
-    # Discover which folders were produced (files newer than job start).
+    _collect_files(job)
+    job.status = "done"
+    ok = job.done - job.failed
+    job.message = f"Finished: {ok} track(s)" + (f", {job.failed} failed" if job.failed else "")
+
+
+def _collect_files(job: Job, drop_recent: bool = False) -> None:
+    """Find the audio files this job wrote (newer than its start)."""
     cutoff = job.started_at - 5
-    touched = set()
-    for p in ROOT.rglob("*"):
+    # A killed job may leave a half-written file, and a retry would skip it
+    # as "already exists". Drop what was written after the last finished song.
+    recent = job.last_song_at
+    files, touched = [], set()
+    for p in job.out_dir.rglob("*"):
         if p.is_file() and p.suffix.lower() in AUDIO_EXTS:
             try:
-                if p.stat().st_mtime >= cutoff:
-                    rel = p.relative_to(ROOT)
-                    touched.add(rel.parts[0] if len(rel.parts) > 1 else "")
+                mtime = p.stat().st_mtime
+                if mtime < cutoff:
+                    continue
+                if drop_recent and mtime > recent:
+                    p.unlink()
+                    continue
+                rel = p.relative_to(job.out_dir)
+                touched.add(rel.parts[0] if len(rel.parts) > 1 else "")
+                files.append(str(p))
             except OSError:
                 pass
     job.folders = sorted(touched)
-    job.status = "done"
-    job.message = f"Finished: {job.done} track(s)"
+    job.files = sorted(files)
+
+
+def _resolve_out_dir(root: Optional[str]) -> Path:
+    """Output folder for a job: the app's library folder, or ROOT by default."""
+    if not root or not root.strip().strip("/"):
+        return ROOT
+    target = (SHARED / root.strip().strip("/")).resolve()
+    if target != SHARED and SHARED not in target.parents:
+        raise HTTPException(status_code=400, detail="Invalid root folder")
+    target.mkdir(parents=True, exist_ok=True)
+    return target
 
 
 def _sync_file_for(url: str) -> Path:
@@ -164,10 +217,10 @@ def _output_template(folder_name: str, is_collection: bool) -> str:
     """Build spotDL --output. folder_name overrides auto playlist naming."""
     if folder_name:
         safe = folder_name.strip().strip("/").replace("..", "")
-        return f"{safe}/{{artists}} - {{title}}.{{output-ext}}"
+        return f"{safe}/{{title}}.{{output-ext}}"
     if is_collection:
-        return "{list-name}/{artists} - {title}.{output-ext}"
-    return "{artists} - {title}.{output-ext}"
+        return "{list-name}/{title}.{output-ext}"
+    return "{title}.{output-ext}"
 
 
 def _is_collection(url: str) -> bool:
@@ -182,6 +235,7 @@ class JobRequest(BaseModel):
     url: str
     kind: str = "download"          # "download" | "sync"
     folder: Optional[str] = None    # override folder name; None/"" = auto
+    root: Optional[str] = None      # library folder relative to shared storage; None = ROOT
 
 
 # --------------------------------------------------------------------------- #
@@ -210,8 +264,10 @@ def create_job(req: JobRequest, _: None = Depends(require_token)) -> dict:
 
     kind = req.kind if req.kind in ("download", "sync") else "download"
     folder = (req.folder or "").strip()
+    root = (req.root or "").strip().strip("/")
+    out_dir = _resolve_out_dir(root)
     job_id = uuid.uuid4().hex[:12]
-    job = Job(job_id, kind, url, folder)
+    job = Job(job_id, kind, url, folder, out_dir)
 
     output = _output_template(folder, _is_collection(url))
     base = [SPOTDL_BIN, "--output", output, *EXTRA_ARGS]
@@ -225,7 +281,7 @@ def create_job(req: JobRequest, _: None = Depends(require_token)) -> dict:
             # First run: download everything and create the sync file.
             cmd = [*base, "sync", url, "--save-file", str(sync_file)]
         # Remember the human name/url alongside the sync file for /syncs.
-        _write_sync_meta(sync_file, url, folder)
+        _write_sync_meta(sync_file, url, folder, root)
     else:
         cmd = [*base, "download", url]
 
@@ -240,6 +296,21 @@ def get_job(job_id: str, _: None = Depends(require_token)) -> dict:
     job = JOBS.get(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="No such job")
+    return job.as_dict()
+
+
+@app.post("/jobs/{job_id}/stop")
+def stop_job(job_id: str, _: None = Depends(require_token)) -> dict:
+    job = JOBS.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="No such job")
+    if job.status == "running" and job.proc is not None:
+        job.stop_requested = True
+        try:
+            # spotDL spawns ffmpeg, so stop the whole process group
+            os.killpg(job.proc.pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
     return job.as_dict()
 
 
@@ -301,6 +372,7 @@ def list_syncs(_: None = Depends(require_token)) -> dict:
             out.append({
                 "url": data.get("url", ""),
                 "folder": data.get("folder", ""),
+                "root": data.get("root", ""),
                 "name": name,
             })
         except Exception:  # noqa: BLE001
@@ -313,9 +385,9 @@ def list_syncs(_: None = Depends(require_token)) -> dict:
 # Sync metadata helpers
 # --------------------------------------------------------------------------- #
 
-def _write_sync_meta(sync_file: Path, url: str, folder: str) -> None:
+def _write_sync_meta(sync_file: Path, url: str, folder: str, root: str) -> None:
     meta = sync_file.with_suffix(".json")
-    meta.write_text(json.dumps({"url": url, "folder": folder}), encoding="utf-8")
+    meta.write_text(json.dumps({"url": url, "folder": folder, "root": root}), encoding="utf-8")
 
 
 def _read_sync_name(sync_file: Path) -> Optional[str]:

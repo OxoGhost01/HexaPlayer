@@ -34,6 +34,17 @@ echo "==> Installing spotDL (10 to 30 minutes the first time, parts are compiled
 export ANDROID_API_LEVEL="$(getprop ro.build.version.sdk)"
 pip install --upgrade spotdl fastapi uvicorn </dev/null
 
+# pip may reuse parts it compiled for an older Python (Termux upgrades Python
+# from time to time), which then fail to load. Rebuild everything if so.
+if ! spotdl --version >/dev/null 2>&1; then
+  echo "==> spotDL does not start, rebuilding it for this Python (can take a while)..."
+  pip install --force-reinstall --no-cache-dir spotdl fastapi uvicorn </dev/null
+  if ! spotdl --version >/dev/null 2>&1; then
+    echo "!! spotDL still fails to start. Run 'spotdl --version' to see why."
+    exit 1
+  fi
+fi
+
 echo "==> Installing Deno (needed by many YouTube tracks)..."
 apt-get install "${APT_OPTS[@]}" deno </dev/null || \
   echo "   (Deno could not be installed, some tracks may fail. See README.)"
@@ -74,6 +85,11 @@ if (exec 3<>"/dev/tcp/127.0.0.1/$HEXADL_PORT") 2>/dev/null; then
   fi
   echo "Port $HEXADL_PORT is used by another program."
   echo "Running processes: $(pgrep -af hexadl_server.py 2>/dev/null || echo none found)"
+  exit 1
+fi
+if ! spotdl --version >/dev/null 2>&1; then
+  echo "spotDL fails to start (usually after Termux updated Python)."
+  echo "Run the HexaPlayer setup command again to repair it."
   exit 1
 fi
 mkdir -p "$HEXADL_ROOT"
