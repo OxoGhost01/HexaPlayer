@@ -11,6 +11,13 @@
 #
 set -e
 
+# soundcloud-v2 pins curl_cffi<0.16, whose Android builds only load on Python
+# 3.13. 0.16.3+ has real builds for each Python, so force it past the pin.
+fix_curl_cffi() {
+  echo "==> Installing a curl_cffi build that matches this Python..."
+  pip install --upgrade --no-deps "curl_cffi>=0.16.3" </dev/null
+}
+
 # Everything lives in main() so bash reads the whole script before running it.
 # With "curl | bash", stdin is the script itself, so nothing may read from it.
 main() {
@@ -33,12 +40,14 @@ echo "==> Installing spotDL (10 to 30 minutes the first time, parts are compiled
 # maturin (used to build pydantic-core) needs the Android API level on Termux.
 export ANDROID_API_LEVEL="$(getprop ro.build.version.sdk)"
 pip install --upgrade spotdl fastapi uvicorn </dev/null
+fix_curl_cffi
 
 # pip may reuse parts it compiled for an older Python (Termux upgrades Python
 # from time to time), which then fail to load. Rebuild everything if so.
 if ! spotdl --version >/dev/null 2>&1; then
   echo "==> spotDL does not start, rebuilding it for this Python (can take a while)..."
   pip install --force-reinstall --no-cache-dir spotdl fastapi uvicorn </dev/null
+  fix_curl_cffi
   if ! spotdl --version >/dev/null 2>&1; then
     echo "!! spotDL still fails to start. Run 'spotdl --version' to see why."
     exit 1
