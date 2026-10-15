@@ -66,10 +66,15 @@ termux-wake-lock 2>/dev/null || true
 export HEXADL_HOST=127.0.0.1
 export HEXADL_PORT=47823
 export HEXADL_ROOT="$HOME/storage/shared/Music/HexaPlayer"
-if curl -fs -m 3 "http://127.0.0.1:$HEXADL_PORT/health" >/dev/null 2>&1; then
-  echo "HexaDL is already running (HexaPlayer starts it in the background)."
-  echo "Nothing to do. To stop it, tap Exit in the Termux notification."
-  exit 0
+if (exec 3<>"/dev/tcp/127.0.0.1/$HEXADL_PORT") 2>/dev/null; then
+  if curl -fs -m 15 "http://127.0.0.1:$HEXADL_PORT/health" >/dev/null 2>&1; then
+    echo "HexaDL is already running (HexaPlayer starts it in the background)."
+    echo "Nothing to do. To stop it: pkill -f hexadl_server.py"
+    exit 0
+  fi
+  echo "Port $HEXADL_PORT is used by another program."
+  echo "Running processes: $(pgrep -af hexadl_server.py 2>/dev/null || echo none found)"
+  exit 1
 fi
 mkdir -p "$HEXADL_ROOT"
 echo "HexaDL running. Leave this open, switch to HexaPlayer, and download."

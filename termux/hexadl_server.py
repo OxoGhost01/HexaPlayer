@@ -14,6 +14,7 @@ Run (manual):  HEXADL_ROOT=~/storage/shared/Music/HexaPlayer python hexadl_serve
 
 import functools
 import hashlib
+import importlib.metadata
 import json
 import os
 import re
@@ -189,8 +190,9 @@ class JobRequest(BaseModel):
 
 @functools.lru_cache(maxsize=1)
 def _spotdl_version() -> str:
+    # Read from package metadata: running "spotdl --version" takes seconds on a phone.
     try:
-        return subprocess.check_output([SPOTDL_BIN, "--version"], text=True).strip()
+        return importlib.metadata.version("spotdl")
     except Exception:  # noqa: BLE001
         return "?"
 
