@@ -6,7 +6,7 @@ onto the phone.
 It is designed to run **inside Termux on the same phone** as HexaPlayer, bound
 to 127.0.0.1. spotDL writes the audio straight into the phone's Music folder
 (HEXADL_ROOT), so HexaPlayer just has to rescan, no files are copied over the
-network. (It also runs fine on a remote server if you ever want that.)
+network.
 
 Run (Termux):  hexadl        # the launcher created by setup.sh
 Run (manual):  HEXADL_ROOT=~/storage/shared/Music/HexaPlayer python hexadl_server.py
@@ -27,8 +27,7 @@ import uuid
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Query
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
 # --------------------------------------------------------------------------- #
@@ -42,7 +41,6 @@ ROOT = Path(os.environ.get("HEXADL_ROOT", "./music")).resolve()
 # Jobs may write anywhere under shared storage (the app's Music Library folder)
 SHARED = Path(os.environ.get("HEXADL_SHARED", "/storage/emulated/0")).resolve()
 SYNC_DIR = Path(os.environ.get("HEXADL_SYNC_DIR", str(ROOT / ".hexadl" / "syncs"))).resolve()
-TOKEN = os.environ.get("HEXADL_TOKEN", "")  # empty = auth disabled (fine for localhost)
 SPOTDL_BIN = os.environ.get("HEXADL_SPOTDL_BIN", "spotdl")
 # Default to opus + no re-encode: YouTube Music already serves opus, so this
 # keeps the original stream instead of spotDL's default of transcoding it
@@ -71,15 +69,6 @@ async def _touch(request, call_next):
     global _last_activity
     _last_activity = time.time()
     return await call_next(request)
-
-
-# --------------------------------------------------------------------------- #
-# Auth
-# --------------------------------------------------------------------------- #
-
-def require_token(x_token: Optional[str] = Header(default=None)) -> None:
-    if TOKEN and x_token != TOKEN:
-        raise HTTPException(status_code=401, detail="Invalid or missing X-Token")
 
 
 # --------------------------------------------------------------------------- #
@@ -267,12 +256,12 @@ def _spotdl_version() -> str:
 
 
 @app.get("/health")
-def health(_: None = Depends(require_token)) -> dict:
+def health() -> dict:
     return {"ok": True, "spotdl": _spotdl_version(), "server": SERVER_VERSION, "root": str(ROOT)}
 
 
 @app.post("/jobs")
-def create_job(req: JobRequest, _: None = Depends(require_token)) -> dict:
+def create_job(req: JobRequest) -> dict:
     # Drop "?si=..." share codes so the same playlist always maps to one sync file
     raw_url = req.url.strip()
     url = raw_url.split("?")[0].split("#")[0]
@@ -314,7 +303,7 @@ def create_job(req: JobRequest, _: None = Depends(require_token)) -> dict:
 
 
 @app.get("/jobs/{job_id}")
-def get_job(job_id: str, _: None = Depends(require_token)) -> dict:
+def get_job(job_id: str) -> dict:
     job = JOBS.get(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="No such job")
@@ -322,7 +311,7 @@ def get_job(job_id: str, _: None = Depends(require_token)) -> dict:
 
 
 @app.post("/jobs/{job_id}/stop")
-def stop_job(job_id: str, _: None = Depends(require_token)) -> dict:
+def stop_job(job_id: str) -> dict:
     job = JOBS.get(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="No such job")
@@ -337,51 +326,15 @@ def stop_job(job_id: str, _: None = Depends(require_token)) -> dict:
 
 
 @app.get("/jobs")
-def list_jobs(_: None = Depends(require_token)) -> dict:
+def list_jobs() -> dict:
     with JOBS_LOCK:
         items = [j.as_dict() for j in JOBS.values()]
     items.sort(key=lambda j: j["id"])
     return {"jobs": items}
 
 
-@app.get("/tree")
-def tree(folder: Optional[str] = Query(default=None), _: None = Depends(require_token)) -> dict:
-    """List audio files (relative paths + size + mtime), optionally scoped to a folder."""
-    base = ROOT
-    if folder:
-        candidate = (ROOT / folder).resolve()
-        if not str(candidate).startswith(str(ROOT)):
-            raise HTTPException(status_code=400, detail="Invalid folder")
-        base = candidate
-    files = []
-    if base.exists():
-        for p in base.rglob("*"):
-            if p.is_file() and p.suffix.lower() in AUDIO_EXTS:
-                try:
-                    st = p.stat()
-                    files.append({
-                        "path": str(p.relative_to(ROOT)),
-                        "size": st.st_size,
-                        "mtime": int(st.st_mtime),
-                    })
-                except OSError:
-                    pass
-    files.sort(key=lambda f: f["path"])
-    return {"files": files}
-
-
-@app.get("/file")
-def get_file(path: str, _: None = Depends(require_token)):
-    target = (ROOT / path).resolve()
-    if not str(target).startswith(str(ROOT)) or not target.is_file():
-        raise HTTPException(status_code=404, detail="No such file")
-    if target.suffix.lower() not in AUDIO_EXTS:
-        raise HTTPException(status_code=400, detail="Not an audio file")
-    return FileResponse(str(target), filename=target.name)
-
-
 @app.get("/syncs")
-def list_syncs(_: None = Depends(require_token)) -> dict:
+def list_syncs() -> dict:
     """Saved sync playlists, so the app can re-sync them with one tap."""
     out = []
     for meta in SYNC_DIR.glob("*.json"):

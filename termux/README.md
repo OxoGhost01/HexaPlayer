@@ -80,6 +80,6 @@ connection** (it should say *Connected*), then paste a Spotify link and hit
 
 ## What the server exposes (localhost only)
 
-`GET /health`, `POST /jobs`, `GET /jobs/{id}`, `POST /jobs/{id}/stop`, `GET /syncs`, `GET /tree`,
-`GET /file`. See `hexadl_server.py`. It binds to `127.0.0.1` by default, so it's
+`GET /health`, `POST /jobs`, `GET /jobs/{id}`, `POST /jobs/{id}/stop`, `GET /jobs`,
+`GET /syncs`. See `hexadl_server.py`. It binds to `127.0.0.1` by default, so it's
 only reachable from the phone itself.
