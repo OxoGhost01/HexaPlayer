@@ -57,6 +57,24 @@ Grab the latest APK from the [Releases page](https://github.com/OxoGhost01/HexaP
 - Access to your audio files (asked on first launch)
 - For Download & Sync only: the free [Termux](https://f-droid.org/packages/com.termux/) app (from F-Droid or GitHub, not the Play Store)
 
+## Permissions
+
+HexaPlayer only asks for what it needs to play your music, nothing more.
+
+| Permission | Why | When |
+|---|---|---|
+| **Music and audio** (`READ_MEDIA_AUDIO`, or `READ_EXTERNAL_STORAGE` on Android 12 and older) | Find and play the songs on your phone | First launch |
+| **Notifications** (`POST_NOTIFICATIONS`, Android 13+) | Show the playback controls notification and update alerts | First launch |
+| **Run in the background** (`FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_MEDIA_PLAYBACK`, `WAKE_LOCK`) | Keep the music playing with the screen off or the app in the background, and work with Android Auto | Granted automatically |
+| **Internet** (`INTERNET`) | Fetch lyrics from LRCLIB, check GitHub for updates, and talk to the downloader running on your own phone | Granted automatically |
+| **Install apps** (`REQUEST_INSTALL_PACKAGES`) | Install HexaPlayer updates from inside the app | Only when you tap Update |
+| **Run commands in Termux** (`com.termux.permission.RUN_COMMAND`) | Start the downloader in Termux for you | Only if you enable Download & Sync |
+| **Storage write** (`WRITE_EXTERNAL_STORAGE`, Android 9 and older only) | Save downloaded music | Only if you use Download & Sync |
+
+When you edit a song's info, Android asks you to confirm the change for that file, each time.
+
+No location, contacts, camera, microphone or account access. No analytics, no ads, and nothing about you or your music is ever sent anywhere.
+
 ## 2.0 is coming
 
 Version 1.5 is the last big update of the 1.x line. HexaPlayer 2.0 is in the works, with a brand new interface, the ability to open any music file with the app, and more surprises. Here is what is planned so far:
