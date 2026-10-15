@@ -332,7 +332,7 @@ if __name__ == "__main__":
     import uvicorn
 
     host = os.environ.get("HEXADL_HOST", "127.0.0.1")
-    port = int(os.environ.get("HEXADL_PORT", "8000"))
+    port = int(os.environ.get("HEXADL_PORT", "47823"))
     if not shutil.which(SPOTDL_BIN):
         print(f"WARNING: '{SPOTDL_BIN}' not found on PATH, jobs will fail.")
     print(f"HexaDL serving on http://{host}:{port}  (downloads -> {ROOT})")

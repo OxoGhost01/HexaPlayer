@@ -4,7 +4,10 @@
 # Safe to run again: it updates everything and keeps your synced playlists.
 #
 # Run it with:
-#   curl -fsSL https://raw.githubusercontent.com/OxoGhost01/HexaPlayer/main/termux/setup.sh | bash
+#   apt update && apt full-upgrade -y && curl -fsSL https://raw.githubusercontent.com/OxoGhost01/HexaPlayer/main/termux/setup.sh | bash
+#
+# The upgrade runs first because a half-upgraded Termux breaks curl itself.
+# apt-get is used instead of pkg because pkg needs a working curl to pick a mirror.
 #
 set -e
 
@@ -18,11 +21,12 @@ export DEBIAN_FRONTEND=noninteractive
 echo "==> Installing HexaPlayer downloader (spotDL) in Termux"
 
 echo "==> Upgrading Termux packages..."
-# "pkg update" only refreshes the lists. A full upgrade is needed, otherwise new
-# packages like ffmpeg link against an old libc++ and fail with CANNOT LINK.
-pkg upgrade "${APT_OPTS[@]}" </dev/null
+# A full upgrade is needed, otherwise new packages like ffmpeg link against an
+# old library and fail with CANNOT LINK.
+apt-get update </dev/null
 dpkg --configure -a </dev/null || true
-pkg install "${APT_OPTS[@]}" python python-pip ffmpeg curl \
+apt-get full-upgrade "${APT_OPTS[@]}" </dev/null
+apt-get install "${APT_OPTS[@]}" python python-pip ffmpeg curl \
   build-essential rust cmake ninja </dev/null
 
 echo "==> Installing spotDL (10 to 30 minutes the first time, parts are compiled)..."
@@ -31,7 +35,7 @@ export ANDROID_API_LEVEL="$(getprop ro.build.version.sdk)"
 pip install --upgrade spotdl fastapi uvicorn </dev/null
 
 echo "==> Installing Deno (needed by many YouTube tracks)..."
-pkg install "${APT_OPTS[@]}" deno </dev/null || \
+apt-get install "${APT_OPTS[@]}" deno </dev/null || \
   echo "   (Deno could not be installed, some tracks may fail. See README.)"
 
 echo "==> Requesting access to shared storage (tap 'Allow' if prompted)..."
@@ -60,7 +64,7 @@ cat > "$PREFIX/bin/hexadl" <<'LAUNCHER'
 # Keep the CPU awake while downloading
 termux-wake-lock 2>/dev/null || true
 export HEXADL_HOST=127.0.0.1
-export HEXADL_PORT=8000
+export HEXADL_PORT=47823
 export HEXADL_ROOT="$HOME/storage/shared/Music/HexaPlayer"
 mkdir -p "$HEXADL_ROOT"
 echo "HexaDL running. Leave this open, switch to HexaPlayer, and download."

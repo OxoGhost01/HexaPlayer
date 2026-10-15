@@ -27,7 +27,7 @@ Install Termux from one of these (same app, pick either):
 Open Termux and paste this one line, then press Enter:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/OxoGhost01/HexaPlayer/main/termux/setup.sh | bash
+apt update && apt full-upgrade -y && curl -fsSL https://raw.githubusercontent.com/OxoGhost01/HexaPlayer/main/termux/setup.sh | bash
 ```
 
 It installs Python, FFmpeg, spotDL and Deno, asks for storage access (tap
@@ -54,9 +54,10 @@ connection** (it should say *Connected*), then paste a Spotify link and hit
 
 ## Tips
 
-- **`CANNOT LINK EXECUTABLE "ffmpeg"` during setup:** your Termux packages were
-  out of date. Run the setup command again, it now upgrades everything first and
-  repairs the broken install.
+- **`CANNOT LINK EXECUTABLE` (curl, ffmpeg, ...):** your Termux packages are
+  half upgraded. Run `apt update && apt full-upgrade -y` (not `pkg`, which needs
+  a working curl), press Enter if asked about a config file, then run the setup
+  command again.
 
 - **Keep it running:** downloads only work while `hexadl` is running in Termux.
   The launcher grabs a wake-lock so the phone won't pause it while the screen is
