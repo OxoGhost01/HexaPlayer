@@ -27,14 +27,16 @@ class PlaylistRepository(context: Context) {
         persist(getAll().filter { it.id != playlistId })
     }
 
-    fun addSong(playlistId: String, songId: Long) {
+    fun addSong(playlistId: String, songId: Long) = addSongs(playlistId, listOf(songId))
+
+    fun addSongs(playlistId: String, songIds: List<Long>) {
         val list = getAll().toMutableList()
         val idx = list.indexOfFirst { it.id == playlistId }
         if (idx < 0) return
         val pl = list[idx]
-        if (songId !in pl.songIds) {
-            list[idx] = pl.copy(songIds = pl.songIds + songId)
-        }
+        val new = songIds.distinct().filter { it !in pl.songIds }
+        if (new.isEmpty()) return
+        list[idx] = pl.copy(songIds = pl.songIds + new)
         persist(list)
     }
 

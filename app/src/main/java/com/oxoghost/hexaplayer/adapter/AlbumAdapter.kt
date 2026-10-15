@@ -13,6 +13,7 @@ import com.oxoghost.hexaplayer.data.Album
 import com.oxoghost.hexaplayer.databinding.ItemAlbumBinding
 
 class AlbumAdapter(
+    private val onLongClick: ((Album) -> Unit)? = null,
     private val onClick: (Album) -> Unit
 ) : ListAdapter<Album, AlbumAdapter.ViewHolder>(DIFF) {
 
@@ -34,6 +35,10 @@ class AlbumAdapter(
                 error(R.drawable.ic_music_note)
             }
             root.setOnClickListener { onClick(album) }
+            root.setOnLongClickListener {
+                onLongClick?.invoke(album)
+                onLongClick != null
+            }
         }
     }
 

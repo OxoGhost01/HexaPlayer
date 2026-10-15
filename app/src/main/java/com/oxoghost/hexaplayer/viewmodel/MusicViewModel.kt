@@ -593,6 +593,11 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         refreshPlaylists()
     }
 
+    fun addSongsToPlaylist(playlistId: String, songIds: List<Long>) {
+        playlistRepository.addSongs(playlistId, songIds)
+        refreshPlaylists()
+    }
+
     fun songsForPlaylist(playlist: Playlist): List<Song> {
         val allSongs = _songs.value ?: return emptyList()
         return playlist.songIds.mapNotNull { id -> allSongs.firstOrNull { it.id == id } }

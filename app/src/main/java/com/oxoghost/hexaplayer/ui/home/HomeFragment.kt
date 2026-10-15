@@ -126,7 +126,9 @@ class HomeFragment : Fragment() {
         onMoreClick = { song, anchor -> showSongMenu(song, anchor) }
     )
 
-    private val albumAdapter = AlbumAdapter { album ->
+    private val albumAdapter = AlbumAdapter(
+        onLongClick = { album -> showAddToPlaylistDialog(album.songs) }
+    ) { album ->
         enterDetail(DetailEntry.AlbumDetail(album))
     }
 
@@ -323,6 +325,8 @@ class HomeFragment : Fragment() {
             val detail = currentDetail
             if (detail is DetailEntry.PlaylistDetail) {
                 showAddSongsDialog(detail.playlist)
+            } else if (detail is DetailEntry.AlbumDetail) {
+                showAddToPlaylistDialog(detail.album.songs)
             } else {
                 showCreatePlaylistDialog()
             }
@@ -417,7 +421,7 @@ class HomeFragment : Fragment() {
                 setSearchSortVisible(search = true, sort = true, playlistSort = false)
             }
             is DetailEntry.AlbumDetail -> {
-                setDetailHeader(detail.album.title, addButton = false)
+                setDetailHeader(detail.album.title, addButton = true)
                 submitSongs(detailSongAdapter, detail.album.songs)
                 setSearchSortVisible(search = false, sort = false, playlistSort = false)
             }
@@ -452,6 +456,7 @@ class HomeFragment : Fragment() {
 
     private fun showAlbums() {
         val albums = (viewModel.albums.value ?: emptyList())
+            .filter { it.songs.size > 1 }
             .filter {
                 it.title.contains(searchQuery, ignoreCase = true) ||
                 it.artist.contains(searchQuery, ignoreCase = true)
@@ -713,7 +718,7 @@ class HomeFragment : Fragment() {
         popup.menu.add(0, 3, 3, getString(R.string.edit_song_info))
         popup.setOnMenuItemClickListener { item ->
             when (item.itemId) {
-                0 -> showAddToPlaylistDialog(song)
+                0 -> showAddToPlaylistDialog(listOf(song))
                 1 -> {
                     viewModel.addToQueueNext(song)
                     requireContext().toast(getString(R.string.plays_next))
@@ -823,7 +828,10 @@ class HomeFragment : Fragment() {
         }
     }
 
-    private fun showAddToPlaylistDialog(song: Song) {
+    /** Adds one song, or a whole album, to a new or existing playlist. */
+    private fun showAddToPlaylistDialog(songs: List<Song>) {
+        if (songs.isEmpty()) return
+        val ids = songs.map { it.id }
         val playlists = viewModel.playlists.value ?: emptyList()
         val names = (listOf(getString(R.string.new_playlist)) + playlists.map { it.name })
             .toTypedArray()
@@ -832,11 +840,15 @@ class HomeFragment : Fragment() {
             .setItems(names) { _, which ->
                 if (which == 0) {
                     showCreatePlaylistDialog { playlist ->
-                        viewModel.addSongToPlaylist(playlist.id, song.id)
+                        viewModel.addSongsToPlaylist(playlist.id, ids)
                     }
                 } else {
-                    viewModel.addSongToPlaylist(playlists[which - 1].id, song.id)
-                    requireContext().toast(getString(R.string.song_added))
+                    val playlist = playlists[which - 1]
+                    viewModel.addSongsToPlaylist(playlist.id, ids)
+                    requireContext().toast(
+                        if (ids.size == 1) getString(R.string.song_added)
+                        else getString(R.string.songs_added_to, ids.size, playlist.name)
+                    )
                 }
             }
             .show()
@@ -941,7 +953,7 @@ class HomeFragment : Fragment() {
             }
             .setPositiveButton(getString(R.string.ok)) { _, _ ->
                 val selected = available.filterIndexed { i, _ -> checked[i] }
-                selected.forEach { viewModel.addSongToPlaylist(playlist.id, it.id) }
+                viewModel.addSongsToPlaylist(playlist.id, selected.map { it.id })
                 if (selected.isNotEmpty()) {
                     val updated = viewModel.playlists.value
                         ?.firstOrNull { it.id == playlist.id }

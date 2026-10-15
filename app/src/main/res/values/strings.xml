@@ -16,6 +16,7 @@
     <string name="add_to_playlist">Add to playlist</string>
     <string name="new_playlist">New playlist</string>
     <string name="song_added">Song added to playlist</string>
+    <string name="songs_added_to">%1$d songs added to %2$s</string>
     <string name="playlist_created">Playlist created</string>
     <string name="playlist_deleted">Playlist deleted</string>
     <string name="delete_playlist">Delete playlist</string>
@@ -113,7 +114,8 @@
     <!-- Link + folder -->
     <string name="dl_link_hint">Spotify link (playlist, album or track)</string>
     <string name="dl_custom_folder_switch">Use a custom folder name</string>
-    <string name="dl_folder_auto_hint">Downloads go to your Music Library folder (Settings), or Music/HexaPlayer if none is set. Playlists and albums get a folder named after them.</string>
+    <string name="dl_folder_auto_hint">Downloads go to %1$s (your Music Library folder, set in Settings). Playlists and albums get a folder named after them.</string>
+    <string name="dl_folder_saved_to">Saved to %1$s</string>
     <string name="dl_folder_name_hint">Folder name</string>
     <string name="dl_download">Download</string>
     <string name="dl_sync">Sync</string>
