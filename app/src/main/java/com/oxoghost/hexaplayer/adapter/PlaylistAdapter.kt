@@ -6,7 +6,10 @@ import android.view.ViewGroup
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
-import coil.load
+import coil3.load
+import coil3.request.crossfade
+import coil3.request.error
+import coil3.request.placeholder
 import com.oxoghost.hexaplayer.R
 import com.oxoghost.hexaplayer.data.Playlist
 import com.oxoghost.hexaplayer.databinding.ItemPlaylistBinding
@@ -44,7 +47,7 @@ class PlaylistAdapter(
                 ivPlaylistCover.setPadding(pad, pad, pad, pad)
                 ivPlaylistCover.scaleType = android.widget.ImageView.ScaleType.CENTER_INSIDE
                 val tv = android.util.TypedValue()
-                root.context.theme.resolveAttribute(com.google.android.material.R.attr.colorPrimary, tv, true)
+                root.context.theme.resolveAttribute(androidx.appcompat.R.attr.colorPrimary, tv, true)
                 ivPlaylistCover.setColorFilter(tv.data)
                 ivPlaylistCover.setImageResource(R.drawable.ic_playlist)
             }

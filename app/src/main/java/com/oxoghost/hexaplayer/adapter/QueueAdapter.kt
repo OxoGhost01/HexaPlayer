@@ -6,11 +6,13 @@ import android.view.View
 import android.view.ViewGroup
 import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.RecyclerView
-import coil.load
+import coil3.load
+import coil3.request.error
+import coil3.request.placeholder
 import com.oxoghost.hexaplayer.R
 import com.oxoghost.hexaplayer.data.Song
-import com.oxoghost.hexaplayer.databinding.ItemQueueSongBinding
 import com.oxoghost.hexaplayer.databinding.ItemQueueSeparatorBinding
+import com.oxoghost.hexaplayer.databinding.ItemQueueSongBinding
 
 /**
  * Adapter for the queue bottom-sheet.

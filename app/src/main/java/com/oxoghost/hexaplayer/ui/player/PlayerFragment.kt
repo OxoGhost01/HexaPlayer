@@ -1,7 +1,6 @@
 package com.oxoghost.hexaplayer.ui.player
 
 import android.graphics.Bitmap
-import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.view.GestureDetector
@@ -20,8 +19,14 @@ import androidx.fragment.app.activityViewModels
 import androidx.media3.common.Player
 import androidx.palette.graphics.Palette
 import androidx.recyclerview.widget.LinearLayoutManager
-import coil.imageLoader
-import coil.request.ImageRequest
+import coil3.BitmapImage
+import coil3.imageLoader
+import coil3.request.ImageRequest
+import coil3.request.allowHardware
+import coil3.request.error
+import coil3.request.placeholder
+import coil3.request.target
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.oxoghost.hexaplayer.R
 import com.oxoghost.hexaplayer.adapter.LyricsAdapter
 import com.oxoghost.hexaplayer.adapter.SongAdapter
@@ -32,7 +37,6 @@ import com.oxoghost.hexaplayer.ui.queue.QueueFragment
 import com.oxoghost.hexaplayer.util.themeColor
 import com.oxoghost.hexaplayer.util.toTimeString
 import com.oxoghost.hexaplayer.viewmodel.MusicViewModel
-import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import kotlin.math.abs
 
 class PlayerFragment : Fragment() {
@@ -76,7 +80,7 @@ class PlayerFragment : Fragment() {
 
     private fun toggleLyrics() {
         showingLyrics = !showingLyrics
-        val accent = requireContext().themeColor(com.google.android.material.R.attr.colorPrimary)
+        val accent = requireContext().themeColor(androidx.appcompat.R.attr.colorPrimary)
         val muted  = ContextCompat.getColor(requireContext(), R.color.colorTextSecondary)
 
         if (showingLyrics) {
@@ -238,13 +242,13 @@ class PlayerFragment : Fragment() {
         }
 
         viewModel.shuffleMode.observe(viewLifecycleOwner) { shuffle ->
-            val accent = requireContext().themeColor(com.google.android.material.R.attr.colorPrimary)
+            val accent = requireContext().themeColor(androidx.appcompat.R.attr.colorPrimary)
             val muted = ContextCompat.getColor(requireContext(), R.color.colorTextSecondary)
             binding.btnShuffle.setColorFilter(if (shuffle) accent else muted)
         }
 
         viewModel.repeatMode.observe(viewLifecycleOwner) { mode ->
-            val accent = requireContext().themeColor(com.google.android.material.R.attr.colorPrimary)
+            val accent = requireContext().themeColor(androidx.appcompat.R.attr.colorPrimary)
             val muted = ContextCompat.getColor(requireContext(), R.color.colorTextSecondary)
             when (mode) {
                 Player.REPEAT_MODE_OFF -> {
@@ -263,7 +267,7 @@ class PlayerFragment : Fragment() {
         }
 
         viewModel.sleepTimerActive.observe(viewLifecycleOwner) { active ->
-            val accent = requireContext().themeColor(com.google.android.material.R.attr.colorPrimary)
+            val accent = requireContext().themeColor(androidx.appcompat.R.attr.colorPrimary)
             val muted = ContextCompat.getColor(requireContext(), R.color.colorTextSecondary)
             binding.btnSleepTimer.setColorFilter(if (active) accent else muted)
         }
@@ -331,7 +335,7 @@ class PlayerFragment : Fragment() {
                 .error(R.drawable.ic_music_note)
                 .listener(
                     onSuccess = { _, result ->
-                        val bmp = (result.drawable as? BitmapDrawable)?.bitmap
+                        val bmp = (result.image as? BitmapImage)?.bitmap
                         if (bmp != null) applyPaletteBackground(bmp)
                         else clearBackground()
                     },

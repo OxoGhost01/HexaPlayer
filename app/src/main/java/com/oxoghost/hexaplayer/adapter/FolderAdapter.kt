@@ -3,7 +3,9 @@ package com.oxoghost.hexaplayer.adapter
 import android.view.LayoutInflater
 import android.view.ViewGroup
 import androidx.recyclerview.widget.RecyclerView
-import coil.load
+import coil3.load
+import coil3.request.error
+import coil3.request.placeholder
 import com.oxoghost.hexaplayer.R
 import com.oxoghost.hexaplayer.data.Song
 import com.oxoghost.hexaplayer.databinding.ItemFolderBinding
