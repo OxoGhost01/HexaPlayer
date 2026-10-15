@@ -73,15 +73,6 @@ class DownloadViewModel(application: Application) : AndroidViewModel(application
 
     // --- Settings ---------------------------------------------------------- //
 
-    var serverUrl: String
-        get() = prefs.getString("server_url", DEFAULT_URL)
-            ?.takeUnless { it == OLD_DEFAULT_URL } ?: DEFAULT_URL
-        set(v) = prefs.edit().putString("server_url", v.trim()).apply()
-
-    var serverToken: String
-        get() = prefs.getString("server_token", "") ?: ""
-        set(v) = prefs.edit().putString("server_token", v.trim()).apply()
-
     /** Custom destination folder name. Blank = auto (playlist name). */
     var customFolder: String
         get() = prefs.getString("custom_folder", "") ?: ""
@@ -102,24 +93,18 @@ class DownloadViewModel(application: Application) : AndroidViewModel(application
     fun testConnection() = connect()
 
     private fun connect() {
-        val server = serverUrl
-        if (server.isBlank()) {
-            _connectionStatus.value = "Set the server address first"
-            setConnected(false)
-            return
-        }
         _connectionStatus.value = "Connecting…"
         _checkResult.value = null
         connectJob?.cancel()
         connectJob = viewModelScope.launch {
             try {
-                onConnected(repo.health(server, serverToken))
+                onConnected(repo.health())
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
                 Log.w(TAG, "Health check failed", e)
                 setConnected(false)
                 _connectionStatus.value =
-                    if (isLocalServer() && Termux.canStartServer(getApplication()))
+                    if (Termux.canStartServer(getApplication()))
                         "Not running. It starts by itself when you download."
                     else "Not connected. Is the downloader running in Termux?"
             }
@@ -135,12 +120,12 @@ class DownloadViewModel(application: Application) : AndroidViewModel(application
     /** Makes sure the server answers before a job, starting it through Termux if needed. */
     private suspend fun ensureServer(): Boolean = serverMutex.withLock {
         try {
-            onConnected(repo.health(serverUrl, serverToken))
+            onConnected(repo.health())
             return true
         } catch (e: Exception) {
             if (e is CancellationException) throw e
         }
-        if (!isLocalServer() || !Termux.canStartServer(getApplication())) {
+        if (!Termux.canStartServer(getApplication())) {
             setConnected(false)
             _connectionStatus.value = "Not connected. Is the downloader running in Termux?"
             return false
@@ -159,7 +144,7 @@ class DownloadViewModel(application: Application) : AndroidViewModel(application
         repeat(20) {
             delay(1500)
             try {
-                onConnected(repo.health(serverUrl, serverToken))
+                onConnected(repo.health())
                 return true
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
@@ -182,17 +167,10 @@ class DownloadViewModel(application: Application) : AndroidViewModel(application
         _checkResult.value = ok
     }
 
-    private fun isLocalServer(): Boolean {
-        val url = serverUrl
-        return "127.0.0.1" in url || "localhost" in url
-    }
-
     fun refreshSyncs() {
-        val server = serverUrl
-        if (server.isBlank()) return
         viewModelScope.launch {
             try {
-                val list = repo.listSyncs(server, serverToken)
+                val list = repo.listSyncs()
                 _syncs.value = list
                 saveSyncCache(list)
             } catch (_: Exception) { }
@@ -223,10 +201,6 @@ class DownloadViewModel(application: Application) : AndroidViewModel(application
     fun submit(link: String, kind: JobKind) {
         val url = link.trim()
         if (url.isBlank()) return
-        if (serverUrl.isBlank()) {
-            _toastMessage.value = "Set the server address first"
-            return
-        }
         val folder = if (useCustomFolder && customFolder.isNotBlank()) customFolder else null
         startJob(kind, url, folder ?: prettyLabel(url), folder, libraryFolder())
     }
@@ -248,7 +222,7 @@ class DownloadViewModel(application: Application) : AndroidViewModel(application
         upsert(job.copy(message = "Stopping…"))
         viewModelScope.launch {
             try {
-                repo.stopJob(serverUrl, serverToken, serverId)
+                repo.stopJob(serverId)
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
                 _toastMessage.value = "Could not stop: ${e.message?.take(100)}"
@@ -277,8 +251,6 @@ class DownloadViewModel(application: Application) : AndroidViewModel(application
             .getString("music_folder", "")?.trim()?.trim('/')?.ifBlank { null }
 
     private fun runJob(job: SpotdlJob) {
-        val server = serverUrl
-        val token = serverToken
         viewModelScope.launch {
             try {
                 upsert(job.copy(message = "Starting the downloader…"))
@@ -286,7 +258,7 @@ class DownloadViewModel(application: Application) : AndroidViewModel(application
                     upsert(job.copy(phase = JobPhase.ERROR, error = "Downloader not running. See the setup guide."))
                     return@launch
                 }
-                val serverId = repo.startJob(server, token, job.url, job.kind, job.folder, job.root)
+                val serverId = repo.startJob(job.url, job.kind, job.folder, job.root)
                 var current = job.copy(
                     serverId = serverId,
                     phase = JobPhase.SERVER,
@@ -296,7 +268,7 @@ class DownloadViewModel(application: Application) : AndroidViewModel(application
 
                 while (true) {
                     delay(1500)
-                    val s = repo.pollJob(server, token, serverId)
+                    val s = repo.pollJob(serverId)
                     current = current.copy(
                         serverDone = s.done,
                         serverTotal = s.total,
@@ -370,7 +342,5 @@ class DownloadViewModel(application: Application) : AndroidViewModel(application
     companion object {
         private const val TAG = "DownloadViewModel"
         private const val MIN_SERVER_VERSION = 2
-        private const val DEFAULT_URL = "http://127.0.0.1:47823"
-        private const val OLD_DEFAULT_URL = "http://127.0.0.1:8000"
     }
 }

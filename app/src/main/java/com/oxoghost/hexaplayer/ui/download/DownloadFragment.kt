@@ -105,19 +105,11 @@ class DownloadFragment : Fragment() {
     }
 
     private fun setupInputs() {
-        binding.etServerUrl.setText(viewModel.serverUrl)
-        binding.etServerToken.setText(viewModel.serverToken)
         binding.etFolder.setText(viewModel.customFolder)
         binding.switchCustomFolder.isChecked = viewModel.useCustomFolder
         binding.tilFolder.visibility =
             if (viewModel.useCustomFolder) View.VISIBLE else View.GONE
 
-        binding.etServerUrl.setOnFocusChangeListener { _, hasFocus ->
-            if (!hasFocus) viewModel.serverUrl = binding.etServerUrl.text?.toString()?.trim() ?: ""
-        }
-        binding.etServerToken.setOnFocusChangeListener { _, hasFocus ->
-            if (!hasFocus) viewModel.serverToken = binding.etServerToken.text?.toString()?.trim() ?: ""
-        }
         binding.etFolder.setOnFocusChangeListener { _, hasFocus ->
             if (!hasFocus) viewModel.customFolder = binding.etFolder.text?.toString()?.trim() ?: ""
         }
@@ -127,10 +119,7 @@ class DownloadFragment : Fragment() {
             binding.tilFolder.visibility = if (checked) View.VISIBLE else View.GONE
         }
 
-        binding.btnTestConnection.setOnClickListener {
-            saveServerFields()
-            viewModel.testConnection()
-        }
+        binding.btnTestConnection.setOnClickListener { viewModel.testConnection() }
 
         binding.btnDownload.setOnClickListener { submit(JobKind.DOWNLOAD) }
         binding.btnSync.setOnClickListener { submit(JobKind.SYNC) }
@@ -144,7 +133,6 @@ class DownloadFragment : Fragment() {
         binding.btnSetupGuide.setOnClickListener { openSetupGuide() }
 
         binding.btnStartServer.setOnClickListener {
-            saveServerFields()
             if (Termux.canStartServer(requireContext())) viewModel.startServer()
             else openSetupGuide()
         }
@@ -160,14 +148,12 @@ class DownloadFragment : Fragment() {
             .commit()
     }
 
-    private fun saveServerFields() {
-        viewModel.serverUrl = binding.etServerUrl.text?.toString()?.trim() ?: ""
-        viewModel.serverToken = binding.etServerToken.text?.toString()?.trim() ?: ""
+    private fun saveFolderField() {
         viewModel.customFolder = binding.etFolder.text?.toString()?.trim() ?: ""
     }
 
     private fun submit(kind: JobKind) {
-        saveServerFields()
+        saveFolderField()
         val link = binding.etLink.text?.toString()?.trim() ?: ""
         if (link.isEmpty()) {
             binding.tilLink.error = getString(R.string.dl_error_empty_link)

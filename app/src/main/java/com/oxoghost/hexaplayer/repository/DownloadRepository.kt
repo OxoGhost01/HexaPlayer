@@ -28,15 +28,12 @@ data class ServerHealth(
     val root: String
 )
 
-/**
- * HTTP client for the HexaDL companion server. Uses HttpURLConnection to avoid
- * pulling in extra dependencies, matching the rest of the app's networking.
- */
+/** HTTP client for the HexaDL server, which always runs in Termux on this phone. */
 class DownloadRepository {
 
     /** Returns the server's spotdl version and download root; throws on failure. */
-    suspend fun health(server: String, token: String): ServerHealth = withContext(Dispatchers.IO) {
-        val json = httpGet(url(server, "/health"), token)
+    suspend fun health(): ServerHealth = withContext(Dispatchers.IO) {
+        val json = httpGet("/health")
         val obj = JSONObject(json)
         ServerHealth(
             version = obj.optString("spotdl", "?"),
@@ -47,8 +44,6 @@ class DownloadRepository {
 
     /** Starts a job on the server, returning its server-side id. */
     suspend fun startJob(
-        server: String,
-        token: String,
         link: String,
         kind: JobKind,
         folder: String?,
@@ -60,13 +55,13 @@ class DownloadRepository {
             if (!folder.isNullOrBlank()) put("folder", folder)
             if (!root.isNullOrBlank()) put("root", root)
         }
-        val json = httpPost(url(server, "/jobs"), token, body.toString())
+        val json = httpPost("/jobs", body.toString())
         JSONObject(json).getString("id")
     }
 
-    suspend fun pollJob(server: String, token: String, jobId: String): ServerJob =
+    suspend fun pollJob(jobId: String): ServerJob =
         withContext(Dispatchers.IO) {
-            val json = httpGet(url(server, "/jobs/$jobId"), token)
+            val json = httpGet("/jobs/$jobId")
             val obj = JSONObject(json)
             val foldersArr = obj.optJSONArray("folders") ?: JSONArray()
             val folders = (0 until foldersArr.length()).map { foldersArr.getString(it) }
@@ -83,13 +78,13 @@ class DownloadRepository {
             )
         }
 
-    suspend fun stopJob(server: String, token: String, jobId: String) {
-        withContext(Dispatchers.IO) { httpPost(url(server, "/jobs/$jobId/stop"), token, "{}") }
+    suspend fun stopJob(jobId: String) {
+        withContext(Dispatchers.IO) { httpPost("/jobs/$jobId/stop", "{}") }
     }
 
-    suspend fun listSyncs(server: String, token: String): List<SyncEntry> =
+    suspend fun listSyncs(): List<SyncEntry> =
         withContext(Dispatchers.IO) {
-            val json = httpGet(url(server, "/syncs"), token)
+            val json = httpGet("/syncs")
             val arr = JSONObject(json).optJSONArray("syncs") ?: JSONArray()
             (0 until arr.length()).map { i ->
                 val s = arr.getJSONObject(i)
@@ -104,24 +99,16 @@ class DownloadRepository {
 
     // --- HTTP helpers ------------------------------------------------------ //
 
-    private fun url(server: String, path: String): String {
-        val base = server.trim().trimEnd('/')
-        val withScheme = if (base.startsWith("http://") || base.startsWith("https://")) base
-        else "https://$base"
-        return withScheme + path
-    }
-
-    private fun open(urlStr: String, token: String): HttpURLConnection {
-        val conn = URL(urlStr).openConnection() as HttpURLConnection
+    private fun open(path: String): HttpURLConnection {
+        val conn = URL(BASE_URL + path).openConnection() as HttpURLConnection
         conn.connectTimeout = 15_000
         conn.readTimeout = 60_000
         conn.instanceFollowRedirects = true
-        if (token.isNotBlank()) conn.setRequestProperty("X-Token", token)
         return conn
     }
 
-    private fun httpGet(urlStr: String, token: String): String {
-        val conn = open(urlStr, token)
+    private fun httpGet(path: String): String {
+        val conn = open(path)
         return try {
             if (conn.responseCode !in 200..299) {
                 val err = conn.errorStream?.bufferedReader()?.readText()
@@ -133,8 +120,8 @@ class DownloadRepository {
         }
     }
 
-    private fun httpPost(urlStr: String, token: String, body: String): String {
-        val conn = open(urlStr, token)
+    private fun httpPost(path: String, body: String): String {
+        val conn = open(path)
         conn.requestMethod = "POST"
         conn.doOutput = true
         conn.setRequestProperty("Content-Type", "application/json")
@@ -148,5 +135,10 @@ class DownloadRepository {
         } finally {
             conn.disconnect()
         }
+    }
+
+    companion object {
+        /** Must match HEXADL_PORT in termux/setup.sh */
+        private const val BASE_URL = "http://127.0.0.1:47823"
     }
 }

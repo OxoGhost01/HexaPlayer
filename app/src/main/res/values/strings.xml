@@ -106,8 +106,6 @@
 
     <!-- Server config -->
     <string name="dl_server_header">Server</string>
-    <string name="dl_server_url_hint">Server address</string>
-    <string name="dl_server_token_hint">Access token (leave empty for Termux)</string>
     <string name="dl_test_connection">Test connection</string>
     <string name="dl_test_success">Success</string>
     <string name="dl_test_failure">Failure</string>
