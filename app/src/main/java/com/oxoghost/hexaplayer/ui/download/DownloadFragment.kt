@@ -10,6 +10,7 @@ import android.view.ViewGroup
 import android.view.inputmethod.InputMethodManager
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
+import androidx.core.widget.doAfterTextChanged
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -60,6 +61,7 @@ class DownloadFragment : Fragment() {
         super.onHiddenChanged(hidden)
         if (!hidden) {
             updateSetupCard()
+            updateDestination()
             viewModel.onScreenShown()
         }
     }
@@ -67,6 +69,17 @@ class DownloadFragment : Fragment() {
     override fun onResume() {
         super.onResume()
         updateSetupCard()
+        updateDestination()
+    }
+
+    /** Shows where files will land, so the library folder from Settings is visible here. */
+    private fun updateDestination() {
+        val b = _binding ?: return
+        val root = viewModel.destinationRoot()
+        b.tvFolderHint.text = getString(R.string.dl_folder_auto_hint, root)
+        val name = b.etFolder.text?.toString()?.trim().orEmpty()
+        b.tilFolder.helperText =
+            if (name.isEmpty()) null else getString(R.string.dl_folder_saved_to, "$root/$name")
     }
 
     /** The card always gives access to the guide, so the setup command can be re-run to update. */
@@ -110,6 +123,7 @@ class DownloadFragment : Fragment() {
         binding.tilFolder.visibility =
             if (viewModel.useCustomFolder) View.VISIBLE else View.GONE
 
+        binding.etFolder.doAfterTextChanged { updateDestination() }
         binding.etFolder.setOnFocusChangeListener { _, hasFocus ->
             if (!hasFocus) viewModel.customFolder = binding.etFolder.text?.toString()?.trim() ?: ""
         }
@@ -117,6 +131,7 @@ class DownloadFragment : Fragment() {
         binding.switchCustomFolder.setOnCheckedChangeListener { _, checked ->
             viewModel.useCustomFolder = checked
             binding.tilFolder.visibility = if (checked) View.VISIBLE else View.GONE
+            updateDestination()
         }
 
         binding.btnTestConnection.setOnClickListener { viewModel.testConnection() }

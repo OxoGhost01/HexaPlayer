@@ -214,6 +214,7 @@
                 android:textSize="13sp" />
 
             <TextView
+                android:id="@+id/tv_folder_hint"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="@string/dl_folder_auto_hint"

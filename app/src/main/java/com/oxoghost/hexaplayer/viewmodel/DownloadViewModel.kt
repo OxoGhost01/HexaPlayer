@@ -245,6 +245,9 @@ class DownloadViewModel(application: Application) : AndroidViewModel(application
         runJob(job)
     }
 
+    /** Where downloads land, relative to storage: the library folder or the server default. */
+    fun destinationRoot(): String = libraryFolder() ?: "Music/HexaPlayer"
+
     /** The Music Library folder from Settings (relative to storage), if any. */
     private fun libraryFolder(): String? =
         getApplication<Application>().getSharedPreferences("hexa_prefs", Context.MODE_PRIVATE)
