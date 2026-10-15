@@ -120,7 +120,8 @@ JOBS_LOCK = threading.Lock()
 # spotDL prints one of these per song when it finishes / skips one.
 _DONE_RE = re.compile(r'^(Downloaded|Skipping|Skip )', re.IGNORECASE)
 # Per-song failures, e.g. "AudioProviderError: YT-DLP download error - <url>"
-_FAILED_RE = re.compile(r'^(\w+Error: |Error downloading)')
+# or "Muse - Falling Down generated an exception: ..." (Spotify lookup failed)
+_FAILED_RE = re.compile(r'^(\w+Error: |Error downloading)| generated an exception: ')
 _TOTAL_RE = re.compile(r'Found (\d+) songs', re.IGNORECASE)
 
 
@@ -151,7 +152,7 @@ def _run_job(job: Job, cmd: List[str]) -> None:
             if _DONE_RE.match(line):
                 job.done += 1
                 job.last_song_at = time.time()
-            elif _FAILED_RE.match(line):
+            elif _FAILED_RE.search(line):
                 job.done += 1
                 job.failed += 1
                 job.last_song_at = time.time()
