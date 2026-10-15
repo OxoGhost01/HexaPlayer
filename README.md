@@ -1,43 +1,71 @@
 # HexaPlayer
 
-A **free**, open-source music player for Android.
+A **free**, open-source music player for Android. (No ads, no tracking, no shit)
 
 ![GitHub Release](https://img.shields.io/github/v/release/oxoghost01/hexaplayer?style=for-the-badge)
 ![GitHub Repo stars](https://img.shields.io/github/stars/oxoghost01/hexaplayer?style=for-the-badge)
 ![GitHub Downloads (all assets, latest release)](https://img.shields.io/github/downloads/oxoghost01/hexaplayer/latest/total?style=for-the-badge)
 
+HexaPlayer plays the music already on your phone, fast and without distractions. It also comes with an optional downloader to bring your Spotify playlists, albums and tracks onto your phone and keep them in sync, all locally.
 
 ## Features
 
-- **Browse** your library by Songs, Albums, Artists, Playlists, or Folders
-- **Full-screen player** with seekbar, shuffle, repeat, and queue view
-- **Queue management** : Play Next, Add to Queue, reorder with drag-and-drop; clicking a song queues the rest of the album automatically
-- **Playlists** : create with a custom cover image, add/remove songs
-- **Search & sort** across all views
-- **Equaliser** : 10-band EQ, bass boost, virtualizer, loudness enhancer, and reverb
-- **Sleep timer** : stop playback after a preset time (15 / 30 / 45 / 60 min) or a custom duration (10 s – 10 h)
-- **Lyrics** : synced (LRC) and plain lyrics via [LRCLIB](https://lrclib.net), displayed in the full-screen player
-- **Song metadata editing** : edit title, artist, and album directly from the 3-dot menu
-- **Spotify download & sync** : download playlists, albums, or tracks from a Spotify link and keep playlists in sync, powered by [spotDL](https://github.com/spotDL/spotify-downloader) running locally on your phone via Termux ([one-time setup](termux/README.md))
-- **Android Auto** : full media browser (Songs, Albums, Artists, Playlists, Folders) with voice search; shuffle and repeat behave identically to the phone app
-- **Widgets** : 4×1 and 5×1 home-screen widgets with album art and playback controls
-- **Auto-updates** : in-app update checker; notifies you when a new version is available
-- **Accent themes** : 6 color presets to match your style
+### Your library
+- **Browse** by Songs, Albums, Artists, Playlists or Folders, with search and sorting everywhere
+- **Albums view** only shows real albums: singles stay in Songs, Artists and Folders
+- **Playlists** with custom covers; add songs one by one or **a whole album at once** (long press an album, or the **+** in its page)
+- **Edit song info** (title, artist, album, cover) from the 3-dot menu
+- **Choose your library folder** in Settings to only show the music you care about
+
+### Playback
+- **Full-screen player** with seekbar, shuffle, repeat, lyrics and the queue
+- **Smart queue**: playing a song queues the rest of its album; Play Next, Add to Queue, drag and drop to reorder
+- **Lyrics**: synced (LRC) and plain lyrics from [LRCLIB](https://lrclib.net)
+- **Equalizer**: 10 bands, bass boost, virtualizer, loudness enhancer and reverb
+- **Sleep timer**: 15 / 30 / 45 / 60 minutes or any custom duration
+- **Swipe the app away to stop the music**, unless Android Auto is using it
+
+### Download & Sync (optional)
+- Paste a **Spotify link** (playlist, album or track) and the music lands in your library folder, named after the playlist or album
+- **Sync** keeps a playlist up to date: new songs are added, removed ones are deleted. Synced playlists can be re-synced in one tap
+- **Stop** any download, **run it again** later: songs already on your phone are skipped
+- Runs [spotDL](https://github.com/spotDL/spotify-downloader) inside **Termux**, on your phone. No account, no server, nothing leaves your device
+- HexaPlayer starts the downloader only when you need it, and it stops by itself when idle
+- A step by step **setup guide** is built into the app. Details in the [Termux guide](termux/README.md)
+
+### Everywhere else
+- **Android Auto**: browse Songs, Albums, Artists, Playlists and Folders, with voice search
+- **Widgets**: 4×1 and 5×1 home screen widgets with album art and controls
+- **In-app updates**: get notified and install new versions directly
+- **Accent colors**: 6 presets to match your style
 
 ## Screenshots
 
-![Main screen](img/main-page.jpg)
+<p align="center">
+  <img src="img/main-page.jpg" width="19%" alt="Library" />
+  <img src="img/big-player.jpg" width="19%" alt="Player" />
+  <img src="img/downloader.png" width="19%" alt="Download &amp; Sync" />
+  <img src="img/equalizer.jpg" width="19%" alt="Equalizer" />
+  <img src="img/settings.jpg" width="19%" alt="Settings" />
+</p>
 
-![Player screen](img/big-player.jpg)
+## Download
 
-![Equalizer](img/equalizer.jpg)
+Grab the latest APK from the [Releases page](https://github.com/OxoGhost01/HexaPlayer/releases/latest) and install it. The app then updates itself.
 
-![Settings](img/settings.jpg)
+- Android 8.1 or newer
+- Access to your audio files (asked on first launch)
+- For Download & Sync only: the free [Termux](https://f-droid.org/packages/com.termux/) app (from F-Droid or GitHub, not the Play Store)
+
+## 2.0 is coming
+
+Version 1.5 is the last big update of the 1.x line. HexaPlayer 2.0 is in the works, with a brand new interface, the ability to open any music file with the app, and more surprises. Here is what is planned so far:
 
 ## Planned Features
 
+- **Open with** : open a song in the app even if it's not in your library
+- **Remember queue** : remember the last played song
 - **Shazam** integration
-- **Discord Rich Presence** integration (because why not)
 - **Wrapped** : a resume of the year
 - **New UI** (+ more personalization options)
 
@@ -45,23 +73,19 @@ A **free**, open-source music player for Android.
 
 | Layer | Library |
 |---|---|
-| Language | Kotlin 2.1.0 |
-| UI | Views + ViewBinding (no Compose) |
-| Media | Media3 ExoPlayer + MediaSession |
-| Image loading | Coil 2.7.0 |
+| Language | Kotlin 2.4 |
+| UI | Views + ViewBinding |
+| Media | Media3 1.11 (ExoPlayer, MediaSession, MediaLibraryService) |
+| Image loading | Coil 3 |
 | Persistence | SharedPreferences + Gson |
-| Architecture | MVVM - ViewModel + LiveData + Repository |
-
-## Requirements
-
-- Android 8.1+ (minSdk 27)
-- `READ_MEDIA_AUDIO` (API 33+) or `READ_EXTERNAL_STORAGE` (API 27–32)
+| Architecture | MVVM: ViewModel + LiveData + Repository |
+| Downloader | spotDL in Termux, behind a small local FastAPI server ([termux/](termux/)) |
 
 ## Building
 
 1. Clone the repo
-2. Open in Android Studio (Hedgehog or newer)
-3. `Build → Make Project` ; no extra setup needed
+2. Open it in a recent Android Studio (Android SDK 36 and JDK 17)
+3. `Build → Make Project`, no extra setup needed
 
 ```bash
 git clone https://github.com/OxoGhost01/HexaPlayer.git
@@ -69,4 +93,4 @@ git clone https://github.com/OxoGhost01/HexaPlayer.git
 
 ## License
 
-[Non-Commercial License](LICENSE) - free to use and modify for any non-commercial purpose.
+[Non-Commercial License](LICENSE): free to use and modify for any non-commercial purpose.
