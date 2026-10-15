@@ -38,9 +38,10 @@ spotDL parts are compiled on the phone. Wait until it prints **Done!**.
 ## 3. Let HexaPlayer start the downloader
 
 In **HexaPlayer, Download tab, Setup guide**, tap **Allow** in step 3. From then
-on, HexaPlayer starts the downloader in the background by itself whenever you
-open the Download tab. Termux shows a notification while it runs; tap **Exit**
-in that notification to stop it.
+on, HexaPlayer starts the downloader in the background by itself when you start
+a download or a sync. Termux shows a notification while it runs, and the
+downloader stops by itself after 10 minutes without downloads (set
+`HEXADL_IDLE_MINUTES` in `$PREFIX/bin/hexadl` to change that, `0` = never).
 
 Prefer to do it by hand? Open Termux and type:
 

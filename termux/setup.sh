@@ -21,7 +21,10 @@ fix_curl_cffi() {
 # Everything lives in main() so bash reads the whole script before running it.
 # With "curl | bash", stdin is the script itself, so nothing may read from it.
 main() {
-REPO_RAW="https://raw.githubusercontent.com/OxoGhost01/HexaPlayer/main/termux"
+# Download from the latest commit: raw.githubusercontent caches "main" for minutes
+REF="$(curl -fsSL -H "Accept: application/vnd.github.sha" \
+  https://api.github.com/repos/OxoGhost01/HexaPlayer/commits/main 2>/dev/null || echo main)"
+REPO_RAW="https://raw.githubusercontent.com/OxoGhost01/HexaPlayer/$REF/termux"
 APT_OPTS=(-y -o Dpkg::Options::=--force-confnew)
 export DEBIAN_FRONTEND=noninteractive
 
@@ -81,8 +84,6 @@ echo "==> Creating the 'hexadl' launcher..."
 mkdir -p "$PREFIX/bin"
 cat > "$PREFIX/bin/hexadl" <<'LAUNCHER'
 #!/data/data/com.termux/files/usr/bin/bash
-# Keep the CPU awake while downloading
-termux-wake-lock 2>/dev/null || true
 export HEXADL_HOST=127.0.0.1
 export HEXADL_PORT=47823
 export HEXADL_ROOT="$HOME/storage/shared/Music/HexaPlayer"
@@ -103,8 +104,11 @@ if ! spotdl --version >/dev/null 2>&1; then
 fi
 mkdir -p "$HEXADL_ROOT"
 echo "HexaDL running. Leave this open, switch to HexaPlayer, and download."
-echo "Music goes to: Music/HexaPlayer"
-exec python "$HOME/.hexadl/hexadl_server.py"
+echo "It stops by itself after 10 minutes without downloads."
+# Keep the CPU awake while the server runs, and let it sleep again after
+termux-wake-lock 2>/dev/null || true
+python "$HOME/.hexadl/hexadl_server.py"
+termux-wake-unlock 2>/dev/null || true
 LAUNCHER
 chmod +x "$PREFIX/bin/hexadl"
 

@@ -57,6 +57,18 @@ SYNC_DIR.mkdir(parents=True, exist_ok=True)
 
 app = FastAPI(title="HexaDL", description="spotDL companion server for HexaPlayer")
 
+# The server exits after this many minutes without requests or running jobs
+# (0 = never), so the wake lock is not held all day.
+IDLE_MINUTES = float(os.environ.get("HEXADL_IDLE_MINUTES", "10"))
+_last_activity = time.time()
+
+
+@app.middleware("http")
+async def _touch(request, call_next):
+    global _last_activity
+    _last_activity = time.time()
+    return await call_next(request)
+
 
 # --------------------------------------------------------------------------- #
 # Auth
@@ -409,6 +421,19 @@ def _read_sync_name(sync_file: Path) -> Optional[str]:
     return None
 
 
+def _idle_watchdog(server) -> None:
+    global _last_activity
+    while not server.should_exit:
+        time.sleep(30)
+        with JOBS_LOCK:
+            busy = any(j.status == "running" for j in JOBS.values())
+        if busy:
+            _last_activity = time.time()
+        elif time.time() - _last_activity > IDLE_MINUTES * 60:
+            print(f"No downloads for {IDLE_MINUTES:g} minutes, stopping. HexaPlayer restarts it when needed.")
+            server.should_exit = True
+
+
 if __name__ == "__main__":
     import uvicorn
 
@@ -417,4 +442,7 @@ if __name__ == "__main__":
     if not shutil.which(SPOTDL_BIN):
         print(f"WARNING: '{SPOTDL_BIN}' not found on PATH, jobs will fail.")
     print(f"HexaDL serving on http://{host}:{port}  (downloads -> {ROOT})")
-    uvicorn.run(app, host=host, port=port)
+    server = uvicorn.Server(uvicorn.Config(app, host=host, port=port))
+    if IDLE_MINUTES > 0:
+        threading.Thread(target=_idle_watchdog, args=(server,), daemon=True).start()
+    server.run()
