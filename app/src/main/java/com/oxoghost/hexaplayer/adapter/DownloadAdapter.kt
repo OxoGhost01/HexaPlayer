@@ -3,36 +3,31 @@ package com.oxoghost.hexaplayer.adapter
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
-import coil.load
 import com.oxoghost.hexaplayer.R
-import com.oxoghost.hexaplayer.data.DownloadItem
-import com.oxoghost.hexaplayer.data.DownloadStatus
+import com.oxoghost.hexaplayer.data.JobKind
+import com.oxoghost.hexaplayer.data.JobPhase
+import com.oxoghost.hexaplayer.data.SpotdlJob
 
-class DownloadAdapter(
-    private val onCancel: (DownloadItem) -> Unit
-) : ListAdapter<DownloadItem, DownloadAdapter.ViewHolder>(DIFF) {
+class DownloadAdapter : ListAdapter<SpotdlJob, DownloadAdapter.ViewHolder>(DIFF) {
 
     companion object {
-        private val DIFF = object : DiffUtil.ItemCallback<DownloadItem>() {
-            override fun areItemsTheSame(a: DownloadItem, b: DownloadItem) = a.id == b.id
-            override fun areContentsTheSame(a: DownloadItem, b: DownloadItem) = a == b
+        private val DIFF = object : DiffUtil.ItemCallback<SpotdlJob>() {
+            override fun areItemsTheSame(a: SpotdlJob, b: SpotdlJob) = a.id == b.id
+            override fun areContentsTheSame(a: SpotdlJob, b: SpotdlJob) = a == b
         }
     }
 
     inner class ViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
-        val ivCover: ImageView = itemView.findViewById(R.id.iv_download_cover)
-        val tvTitle: TextView = itemView.findViewById(R.id.tv_download_title)
-        val tvArtist: TextView = itemView.findViewById(R.id.tv_download_artist)
-        val tvStatus: TextView = itemView.findViewById(R.id.tv_download_status)
-        val progressBar: ProgressBar = itemView.findViewById(R.id.progress_download)
-        val btnCancel: ImageButton = itemView.findViewById(R.id.btn_cancel_download)
+        val icon: ImageView = itemView.findViewById(R.id.iv_job_icon)
+        val title: TextView = itemView.findViewById(R.id.tv_job_title)
+        val status: TextView = itemView.findViewById(R.id.tv_job_status)
+        val progress: ProgressBar = itemView.findViewById(R.id.progress_job)
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
@@ -42,57 +37,47 @@ class DownloadAdapter(
     }
 
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
-        val item = getItem(position)
-        holder.tvTitle.text = item.title
-        holder.tvArtist.text = item.artist
-        holder.ivCover.load(item.imageUrl) {
-            placeholder(R.drawable.ic_music_note)
-            error(R.drawable.ic_music_note)
-        }
+        val job = getItem(position)
         val ctx = holder.itemView.context
 
-        when (item.status) {
-            DownloadStatus.QUEUED -> {
-                holder.tvStatus.text = ctx.getString(R.string.dl_status_queued)
-                holder.progressBar.isIndeterminate = false
-                holder.progressBar.progress = 0
-                holder.btnCancel.visibility = View.VISIBLE
+        holder.icon.setImageResource(
+            if (job.kind == JobKind.SYNC) R.drawable.ic_repeat else R.drawable.ic_download
+        )
+        val kindLabel = if (job.kind == JobKind.SYNC)
+            ctx.getString(R.string.dl_kind_sync) else ctx.getString(R.string.dl_kind_download)
+        holder.title.text = "$kindLabel · ${job.label}"
+
+        when (job.phase) {
+            JobPhase.QUEUED -> {
+                holder.status.text = job.message
+                holder.progress.isIndeterminate = true
             }
-            DownloadStatus.DOWNLOADING -> {
-                holder.tvStatus.text = if (item.progress > 0)
-                    ctx.getString(R.string.dl_status_downloading_pct, item.progress)
-                else
-                    ctx.getString(R.string.dl_status_preparing)
-                holder.progressBar.isIndeterminate = item.progress == 0
-                holder.progressBar.progress = item.progress
-                holder.btnCancel.visibility = View.VISIBLE
+            JobPhase.SERVER -> {
+                val counter = if (job.serverTotal > 0) " ${job.serverDone}/${job.serverTotal}"
+                else if (job.serverDone > 0) " ${job.serverDone}" else ""
+                holder.status.text = ctx.getString(R.string.dl_phase_server) + counter +
+                    if (job.message.isNotBlank()) "\n${job.message}" else ""
+                if (job.serverTotal > 0) {
+                    holder.progress.isIndeterminate = false
+                    holder.progress.progress = (job.serverDone * 100 / job.serverTotal).coerceIn(0, 100)
+                } else {
+                    holder.progress.isIndeterminate = true
+                }
             }
-            DownloadStatus.DONE -> {
-                holder.tvStatus.text = ctx.getString(R.string.dl_status_done)
-                holder.progressBar.isIndeterminate = false
-                holder.progressBar.progress = 100
-                holder.btnCancel.visibility = View.GONE
+            JobPhase.IMPORTING -> {
+                holder.status.text = ctx.getString(R.string.dl_phase_importing)
+                holder.progress.isIndeterminate = true
             }
-            DownloadStatus.SKIPPED -> {
-                holder.tvStatus.text = ctx.getString(R.string.dl_status_skipped)
-                holder.progressBar.isIndeterminate = false
-                holder.progressBar.progress = 100
-                holder.btnCancel.visibility = View.GONE
+            JobPhase.DONE -> {
+                holder.status.text = "✓ ${job.message}"
+                holder.progress.isIndeterminate = false
+                holder.progress.progress = 100
             }
-            DownloadStatus.ERROR -> {
-                holder.tvStatus.text = ctx.getString(R.string.dl_status_error, item.errorMessage ?: "unknown")
-                holder.progressBar.isIndeterminate = false
-                holder.progressBar.progress = 0
-                holder.btnCancel.visibility = View.GONE
-            }
-            DownloadStatus.CANCELLED -> {
-                holder.tvStatus.text = ctx.getString(R.string.dl_status_cancelled)
-                holder.progressBar.isIndeterminate = false
-                holder.progressBar.progress = 0
-                holder.btnCancel.visibility = View.GONE
+            JobPhase.ERROR -> {
+                holder.status.text = ctx.getString(R.string.dl_status_error, job.error ?: "unknown")
+                holder.progress.isIndeterminate = false
+                holder.progress.progress = 0
             }
         }
-
-        holder.btnCancel.setOnClickListener { onCancel(item) }
     }
 }

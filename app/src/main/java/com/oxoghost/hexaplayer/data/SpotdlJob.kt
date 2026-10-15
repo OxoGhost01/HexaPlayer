@@ -1,17 +1,42 @@
 package com.oxoghost.hexaplayer.data
 
-data class DownloadItem(
-    val id: Long = System.currentTimeMillis(),
-    val title: String,
-    val artist: String,
-    val imageUrl: String,
-    val audioUrl: String,
-    val outputFolder: String,
-    var status: DownloadStatus = DownloadStatus.QUEUED,
-    var progress: Int = 0,
-    var errorMessage: String? = null
+/**
+ * A download/sync job driven through the HexaDL server (spotDL running in
+ * Termux on the phone). spotDL writes the audio into the shared Music folder;
+ * the app then indexes the finished files into the library.
+ */
+data class SpotdlJob(
+    val id: Long,
+    val kind: JobKind,
+    val url: String,
+    val label: String,
+    val serverId: String? = null,
+    val phase: JobPhase = JobPhase.QUEUED,
+    val serverDone: Int = 0,
+    val serverTotal: Int = 0,
+    val message: String = "",
+    val error: String? = null
 )
 
-enum class DownloadStatus {
-    QUEUED, DOWNLOADING, DONE, SKIPPED, ERROR, CANCELLED
+enum class JobKind { DOWNLOAD, SYNC }
+
+enum class JobPhase {
+    /** Waiting to be sent to the server. */
+    QUEUED,
+
+    /** spotDL is downloading. */
+    SERVER,
+
+    /** Indexing the finished files into the library. */
+    IMPORTING,
+
+    DONE,
+    ERROR
 }
+
+/** A saved sync playlist reported by the server (`GET /syncs`). */
+data class SyncEntry(
+    val url: String,
+    val folder: String,
+    val name: String
+)

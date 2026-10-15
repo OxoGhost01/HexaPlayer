@@ -1,0 +1,179 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:clickable="true"
+    android:focusable="true"
+    android:background="@color/colorBackground">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingStart="4dp"
+        android:paddingEnd="16dp">
+
+        <ImageButton
+            android:id="@+id/btn_back"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/back"
+            android:src="@drawable/ic_arrow_back"
+            app:tint="@color/colorText" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:text="@string/tx_title"
+            android:textColor="@color/colorText"
+            android:textSize="20sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <androidx.core.widget.NestedScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:clipToPadding="false">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp"
+            android:paddingTop="4dp"
+            android:paddingBottom="24dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="16dp"
+                android:text="@string/tx_intro"
+                android:textColor="@color/colorTextSecondary"
+                android:textSize="13sp"
+                android:lineSpacingMultiplier="1.3" />
+
+            <!-- Step 1: install Termux -->
+            <LinearLayout style="@style/TermuxStepCard">
+
+                <TextView style="@style/TermuxStepLabel" android:text="@string/tx_step_1" />
+                <TextView style="@style/TermuxStepTitle" android:text="@string/tx_install_title" />
+                <TextView style="@style/TermuxStepBody" android:text="@string/tx_install_body" />
+                <TextView android:id="@+id/tv_install_status" style="@style/TermuxStepStatus" />
+
+                <LinearLayout
+                    android:id="@+id/row_install"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:orientation="horizontal">
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btn_install_fdroid"
+                        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:layout_marginEnd="6dp"
+                        android:text="@string/tx_install_fdroid"
+                        android:textAllCaps="false" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btn_install_github"
+                        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:layout_marginStart="6dp"
+                        android:text="@string/tx_install_github"
+                        android:textAllCaps="false" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- Step 2: run the setup command -->
+            <LinearLayout style="@style/TermuxStepCard">
+
+                <TextView style="@style/TermuxStepLabel" android:text="@string/tx_step_2" />
+                <TextView style="@style/TermuxStepTitle" android:text="@string/tx_command_title" />
+                <TextView style="@style/TermuxStepBody" android:text="@string/tx_command_body" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:background="@color/colorSurface"
+                    android:padding="10dp"
+                    android:fontFamily="monospace"
+                    android:text="@string/dl_setup_command"
+                    android:textColor="@color/colorText"
+                    android:textIsSelectable="true"
+                    android:textSize="12sp" />
+
+                <TextView style="@style/TermuxStepBody" android:text="@string/tx_command_wait" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_copy_open"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:text="@string/tx_command_button"
+                    android:textAllCaps="false" />
+            </LinearLayout>
+
+            <!-- Step 3: let HexaPlayer start Termux -->
+            <LinearLayout style="@style/TermuxStepCard">
+
+                <TextView style="@style/TermuxStepLabel" android:text="@string/tx_step_3" />
+                <TextView style="@style/TermuxStepTitle" android:text="@string/tx_permission_title" />
+                <TextView style="@style/TermuxStepBody" android:text="@string/tx_permission_body" />
+                <TextView android:id="@+id/tv_permission_status" style="@style/TermuxStepStatus" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_permission"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:text="@string/tx_permission_button"
+                    android:textAllCaps="false" />
+            </LinearLayout>
+
+            <!-- Step 4: start -->
+            <LinearLayout style="@style/TermuxStepCard">
+
+                <TextView style="@style/TermuxStepLabel" android:text="@string/tx_step_4" />
+                <TextView style="@style/TermuxStepTitle" android:text="@string/tx_start_title" />
+                <TextView style="@style/TermuxStepBody" android:text="@string/tx_start_body" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_start"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:text="@string/tx_start_button"
+                    android:textAllCaps="false" />
+            </LinearLayout>
+
+            <!-- Tips -->
+            <LinearLayout style="@style/TermuxStepCard">
+
+                <TextView style="@style/TermuxStepLabel" android:text="@string/tx_tips_label" />
+                <TextView style="@style/TermuxStepBody" android:text="@string/tx_tips_body" />
+            </LinearLayout>
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_full_guide"
+                style="@style/Widget.MaterialComponents.Button.TextButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/tx_full_guide"
+                android:textAllCaps="false" />
+        </LinearLayout>
+    </androidx.core.widget.NestedScrollView>
+</LinearLayout>

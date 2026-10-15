@@ -1,134 +1,157 @@
 package com.oxoghost.hexaplayer.repository
 
-import com.oxoghost.hexaplayer.data.DownloadItem
-import com.oxoghost.hexaplayer.data.DownloadStatus
-import com.oxoghost.hexaplayer.data.JamendoTrack
+import com.oxoghost.hexaplayer.data.JobKind
+import com.oxoghost.hexaplayer.data.SyncEntry
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
 import org.json.JSONObject
-import java.io.File
-import java.io.FileOutputStream
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
 
+/** Snapshot of a server-side job (`GET /jobs/{id}`). */
+data class ServerJob(
+    val status: String,      // running | done | error
+    val done: Int,
+    val total: Int,
+    val message: String,
+    val error: String?,
+    val folders: List<String>
+)
+
+/** An audio file on the server (`GET /tree`). */
+data class RemoteFile(
+    val path: String,
+    val size: Long,
+    val mtime: Long
+)
+
+/** Result of `GET /health`. */
+data class ServerHealth(
+    val version: String,
+    val root: String
+)
+
+/**
+ * HTTP client for the HexaDL companion server. Uses HttpURLConnection to avoid
+ * pulling in extra dependencies, matching the rest of the app's networking.
+ */
 class DownloadRepository {
 
-    suspend fun search(query: String, clientId: String): List<JamendoTrack> =
+    /** Returns the server's spotdl version and download root; throws on failure. */
+    suspend fun health(server: String, token: String): ServerHealth = withContext(Dispatchers.IO) {
+        val json = httpGet(url(server, "/health"), token)
+        val obj = JSONObject(json)
+        ServerHealth(
+            version = obj.optString("spotdl", "?"),
+            root = obj.optString("root", "")
+        )
+    }
+
+    /** Starts a job on the server, returning its server-side id. */
+    suspend fun startJob(
+        server: String,
+        token: String,
+        link: String,
+        kind: JobKind,
+        folder: String?
+    ): String = withContext(Dispatchers.IO) {
+        val body = JSONObject().apply {
+            put("url", link)
+            put("kind", if (kind == JobKind.SYNC) "sync" else "download")
+            if (!folder.isNullOrBlank()) put("folder", folder)
+        }
+        val json = httpPost(url(server, "/jobs"), token, body.toString())
+        JSONObject(json).getString("id")
+    }
+
+    suspend fun pollJob(server: String, token: String, jobId: String): ServerJob =
         withContext(Dispatchers.IO) {
-            val encoded = URLEncoder.encode(query, "UTF-8")
-            val url = "https://api.jamendo.com/v3.0/tracks/" +
-                "?client_id=$clientId" +
-                "&format=json" +
-                "&search=$encoded" +
-                "&fuzzytags=$encoded" +
-                "&audioformat=mp32" +
-                "&imagesize=200" +
-                "&limit=20"
-            val json = httpGet(url)
-            val root = JSONObject(json)
-            val headers = root.optJSONObject("headers")
-            val code = headers?.optInt("code", 0) ?: 0
-            if (code != 0) {
-                val msg = headers?.optString("error_message") ?: "Unknown error"
-                throw IOException("Jamendo API error $code: $msg")
+            val json = httpGet(url(server, "/jobs/$jobId"), token)
+            val obj = JSONObject(json)
+            val foldersArr = obj.optJSONArray("folders") ?: JSONArray()
+            val folders = (0 until foldersArr.length()).map { foldersArr.getString(it) }
+            ServerJob(
+                status = obj.optString("status", "running"),
+                done = obj.optInt("done", 0),
+                total = obj.optInt("total", 0),
+                message = obj.optString("message", ""),
+                error = obj.optString("error", "").ifBlank { null },
+                folders = folders
+            )
+        }
+
+    suspend fun tree(server: String, token: String, folder: String?): List<RemoteFile> =
+        withContext(Dispatchers.IO) {
+            val path = if (folder.isNullOrBlank()) "/tree"
+            else "/tree?folder=${URLEncoder.encode(folder, "UTF-8")}"
+            val json = httpGet(url(server, path), token)
+            val arr = JSONObject(json).optJSONArray("files") ?: JSONArray()
+            (0 until arr.length()).map { i ->
+                val f = arr.getJSONObject(i)
+                RemoteFile(f.getString("path"), f.optLong("size"), f.optLong("mtime"))
             }
-            val results = root.getJSONArray("results")
-            (0 until results.length()).mapNotNull { i ->
-                val t = results.getJSONObject(i)
-                val audioUrl = t.optString("audiodownload").ifEmpty {
-                    t.optString("audio")
-                }
-                if (audioUrl.isEmpty()) return@mapNotNull null
-                JamendoTrack(
-                    id = t.optString("id"),
-                    name = t.optString("name"),
-                    artistName = t.optString("artist_name"),
-                    albumName = t.optString("album_name"),
-                    albumImage = t.optString("album_image"),
-                    audioUrl = audioUrl
+        }
+
+    suspend fun listSyncs(server: String, token: String): List<SyncEntry> =
+        withContext(Dispatchers.IO) {
+            val json = httpGet(url(server, "/syncs"), token)
+            val arr = JSONObject(json).optJSONArray("syncs") ?: JSONArray()
+            (0 until arr.length()).map { i ->
+                val s = arr.getJSONObject(i)
+                SyncEntry(
+                    url = s.optString("url"),
+                    folder = s.optString("folder"),
+                    name = s.optString("name").ifBlank { "Playlist" }
                 )
             }
         }
 
-    suspend fun download(
-        item: DownloadItem,
-        cancelFlag: () -> Boolean,
-        onProgress: (Int) -> Unit
-    ): DownloadStatus = withContext(Dispatchers.IO) {
-        val dir = File(item.outputFolder).also { it.mkdirs() }
+    // --- HTTP helpers ------------------------------------------------------ //
 
-        val safeName = buildSafeFilename(item.artist, item.title)
-        val outFile = File(dir, safeName)
-        if (outFile.exists()) return@withContext DownloadStatus.SKIPPED
+    private fun url(server: String, path: String): String {
+        val base = server.trim().trimEnd('/')
+        val withScheme = if (base.startsWith("http://") || base.startsWith("https://")) base
+        else "https://$base"
+        return withScheme + path
+    }
 
-        val conn = openConnection(item.audioUrl)
-        val totalBytes = conn.contentLengthLong.takeIf { it > 0 } ?: -1L
-        var downloaded = 0L
+    private fun open(urlStr: String, token: String): HttpURLConnection {
+        val conn = URL(urlStr).openConnection() as HttpURLConnection
+        conn.connectTimeout = 15_000
+        conn.readTimeout = 60_000
+        conn.instanceFollowRedirects = true
+        if (token.isNotBlank()) conn.setRequestProperty("X-Token", token)
+        return conn
+    }
 
-        try {
-            conn.inputStream.use { input ->
-                FileOutputStream(outFile).use { output ->
-                    val buffer = ByteArray(8_192)
-                    var read: Int
-                    while (input.read(buffer).also { read = it } != -1) {
-                        if (cancelFlag()) {
-                            outFile.delete()
-                            return@withContext DownloadStatus.CANCELLED
-                        }
-                        output.write(buffer, 0, read)
-                        downloaded += read
-                        if (totalBytes > 0) {
-                            onProgress((downloaded * 100 / totalBytes).toInt())
-                        }
-                    }
-                }
+    private fun httpGet(urlStr: String, token: String): String {
+        val conn = open(urlStr, token)
+        return try {
+            if (conn.responseCode !in 200..299) {
+                val err = conn.errorStream?.bufferedReader()?.readText()
+                throw IOException("HTTP ${conn.responseCode}: ${err ?: conn.responseMessage}")
             }
-            DownloadStatus.DONE
-        } catch (e: Exception) {
-            outFile.delete()
-            throw e
+            conn.inputStream.bufferedReader().readText()
         } finally {
             conn.disconnect()
         }
     }
 
-    private fun buildSafeFilename(artist: String, title: String): String {
-        val illegal = Regex("""[/\\:*?"<>|]""")
-        val a = artist.replace(illegal, "_").take(60)
-        val t = title.replace(illegal, "_").take(80)
-        return if (a.isNotEmpty()) "$a - $t.mp3" else "$t.mp3"
-    }
-
-    private fun openConnection(urlStr: String): HttpURLConnection {
-        var location = urlStr
-        repeat(5) {
-            val conn = URL(location).openConnection() as HttpURLConnection
-            conn.instanceFollowRedirects = false
-            conn.connectTimeout = 15_000
-            conn.readTimeout = 60_000
-            val code = conn.responseCode
-            if (code in 300..399) {
-                location = conn.getHeaderField("Location") ?: return conn
-                conn.disconnect()
-            } else {
-                return conn
-            }
-        }
-        return URL(location).openConnection() as HttpURLConnection
-    }
-
-    private fun httpGet(url: String): String {
-        val conn = URL(url).openConnection() as HttpURLConnection
-        conn.instanceFollowRedirects = true
-        conn.connectTimeout = 15_000
-        conn.readTimeout = 30_000
+    private fun httpPost(urlStr: String, token: String, body: String): String {
+        val conn = open(urlStr, token)
+        conn.requestMethod = "POST"
+        conn.doOutput = true
+        conn.setRequestProperty("Content-Type", "application/json")
         return try {
+            conn.outputStream.use { it.write(body.toByteArray()) }
+            if (conn.responseCode !in 200..299) {
+                val err = conn.errorStream?.bufferedReader()?.readText()
+                throw IOException("HTTP ${conn.responseCode}: ${err ?: conn.responseMessage}")
+            }
             conn.inputStream.bufferedReader().readText()
-        } catch (e: IOException) {
-            val err = conn.errorStream?.bufferedReader()?.readText()
-            throw IOException("HTTP ${conn.responseCode}: ${err ?: e.message}")
         } finally {
             conn.disconnect()
         }

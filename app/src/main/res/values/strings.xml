@@ -31,7 +31,7 @@
     <string name="settings_scan_done">Library updated</string>
     <string name="settings_donate">Buy me a coffee ☕</string>
     <string name="settings_accent_color">Accent Color</string>
-    <string name="settings_accent_restart">Accent applied — tap Rescan or navigate away to refresh all colors.</string>
+    <string name="settings_accent_restart">Accent applied. Tap Rescan or navigate away to refresh all colors.</string>
     <string name="settings_library">Library</string>
     <string name="settings_sort_by">Sort Songs By</string>
     <string name="settings_show_unknown">Show Unknown Songs</string>
@@ -90,37 +90,49 @@
         <item>Plate</item>
     </string-array>
 
-    <string name="download_coming_soon">Download — coming in a future update</string>
+    <!-- Download screen (spotDL running in Termux) -->
+    <string name="dl_title">Download &amp; Sync</string>
+    <string name="dl_subtitle">Download Spotify playlists, albums and tracks with spotDL running in Termux on your phone</string>
 
-    <!-- Download screen -->
-    <string name="dl_title">Discover Music</string>
-    <string name="dl_subtitle">Search and download Creative Commons music from Jamendo</string>
-    <string name="dl_search_hint">Song title, artist, or genre…</string>
-    <string name="dl_search">Search</string>
-    <string name="dl_change_folder">Change</string>
+    <!-- Setup helper (shown until connected) -->
+    <string name="dl_setup_header">One-time setup</string>
+    <string name="dl_setup_body">Downloads run through the free Termux app, which runs spotDL on your phone. Follow the setup guide once, then HexaPlayer starts it for you.</string>
+    <string name="dl_setup_guide">Setup guide</string>
+    <string name="dl_start_server">Start downloader</string>
+    <string name="dl_setup_copied">Setup command copied</string>
+
+    <!-- Server config -->
+    <string name="dl_server_header">Server</string>
+    <string name="dl_server_url_hint">Server address</string>
+    <string name="dl_server_token_hint">Access token (leave empty for Termux)</string>
+    <string name="dl_test_connection">Test connection</string>
+
+    <!-- Link + folder -->
+    <string name="dl_link_hint">Spotify link (playlist, album or track)</string>
+    <string name="dl_custom_folder_switch">Use a custom folder name</string>
+    <string name="dl_folder_auto_hint">By default, playlists/albums go into a folder named after them.</string>
+    <string name="dl_folder_name_hint">Folder name</string>
+    <string name="dl_download">Download</string>
+    <string name="dl_sync">Sync</string>
+
+    <!-- Sections -->
+    <string name="dl_section_syncs">Synced playlists</string>
+    <string name="dl_section_jobs">Downloads</string>
+    <string name="dl_resync">Re-sync</string>
     <string name="dl_clear_done">Clear done</string>
-    <string name="dl_empty">Search for music to get started.\nAll tracks are Creative Commons licensed.</string>
-    <string name="dl_error_empty_query">Enter a song name or artist</string>
+
+    <!-- Kinds / phases -->
+    <string name="dl_kind_download">Download</string>
+    <string name="dl_kind_sync">Sync</string>
+    <string name="dl_phase_server">Downloading</string>
+    <string name="dl_phase_importing">Adding to library…</string>
+
+    <!-- Misc -->
+    <string name="dl_error_empty_link">Paste a Spotify link first</string>
     <string name="dl_permission_banner">Storage permission needed to save downloads.</string>
     <string name="dl_permission_grant">Grant</string>
-    <string name="dl_client_id_hint">Jamendo Client ID</string>
-    <string name="dl_client_id_desc">Free API key from developer.jamendo.com — required to search the catalog.</string>
-    <string name="dl_jamendo_no_client_id">Enter your Jamendo Client ID first (free at developer.jamendo.com)</string>
-    <string name="dl_no_results">No tracks found — try a different search term</string>
-    <string name="dl_results_header">Search results (%d)</string>
-    <string name="dl_section_downloads">Downloads</string>
-    <string name="dl_download_track">Download</string>
-    <string name="dl_added_to_queue">Added: %s</string>
-    <string name="dl_cc_notice">All tracks are Creative Commons licensed. Attribution may be required depending on the license.</string>
-
-    <!-- Download item statuses -->
-    <string name="dl_status_queued">Queued</string>
-    <string name="dl_status_preparing">Preparing…</string>
-    <string name="dl_status_downloading_pct">Downloading… %d%%</string>
-    <string name="dl_status_done">Done ✓</string>
-    <string name="dl_status_skipped">Already exists — skipped</string>
     <string name="dl_status_error">Error: %s</string>
-    <string name="dl_status_cancelled">Cancelled</string>
+    <string name="dl_setup_command">apt update &amp;&amp; apt full-upgrade -y &amp;&amp; curl -fsSL https://raw.githubusercontent.com/OxoGhost01/HexaPlayer/main/termux/setup.sh | bash</string>
     <string name="permission_rationale">HexaPlayer needs access to your audio files to play music.</string>
     <string name="songs_count">%d songs</string>
     <string name="albums_count">%d albums</string>
@@ -146,7 +158,7 @@
     <string name="added_to_queue">Added to queue</string>
     <string name="queue">Queue</string>
     <string name="empty_queue">Queue is empty</string>
-    <string name="queue_shuffle_note">Shuffle is on — context queue drag is disabled (user queue always reorderable)</string>
+    <string name="queue_shuffle_note">Shuffle is on: context queue drag is disabled (user queue always reorderable)</string>
     <string name="play_all">▶  Play all</string>
     <string name="shuffle_all">⇀  Shuffle</string>
     <string name="remove_from_queue">Remove</string>
@@ -156,7 +168,7 @@
     <string name="edit_song_info">Edit song info</string>
     <string name="edit_song_dialog_title">Edit Song Info</string>
     <string name="song_info_updated">Song info updated</string>
-    <string name="metadata_permission_needed">Cannot edit — permission denied</string>
+    <string name="metadata_permission_needed">Cannot edit, permission denied</string>
     <string name="sleep_timer">Sleep timer</string>
     <string name="sleep_timer_cancel">Cancel timer</string>
     <string name="sleep_timer_set">%d min timer set</string>
@@ -181,7 +193,7 @@
     <string name="update_download">Download</string>
     <string name="update_install">Install update</string>
     <string name="update_downloading">Downloading v%s…</string>
-    <string name="update_install_permission">Allow HexaPlayer to install apps in Settings first</string>
+    <string name="update_install_permission">Allow HexaPlayer to install apps, then tap Update again</string>
     <string name="update_new_version">New version available!</string>
     <string name="update_version_label">v%s</string>
     <string name="update_not_now">Not now</string>
@@ -192,4 +204,37 @@
     <string name="widget_4x1_desc">4×1 player widget with album art and controls</string>
     <string name="widget_5x1_label">HexaPlayer (5×1)</string>
     <string name="widget_5x1_desc">5×1 compact player widget with full controls</string>
+
+    <!-- Termux setup guide -->
+    <string name="back">Back</string>
+    <string name="tx_title">Downloader setup</string>
+    <string name="tx_intro">HexaPlayer downloads music with spotDL, a free tool that runs inside the Termux app on your phone. Nothing is sent to an outside server. You only do steps 1 to 3 once.</string>
+    <string name="tx_step_1">Step 1</string>
+    <string name="tx_install_title">Install Termux</string>
+    <string name="tx_install_body">Download Termux from F-Droid (tap Download APK) or from GitHub (tap the file ending in universal.apk). Do not use the Play Store version, it does not work with this setup. Open Termux once after installing it and wait for it to finish preparing.</string>
+    <string name="tx_install_fdroid">F-Droid</string>
+    <string name="tx_install_github">GitHub</string>
+    <string name="tx_installed">✓ Termux is installed</string>
+    <string name="tx_not_installed">Termux is not installed yet</string>
+    <string name="tx_step_2">Step 2</string>
+    <string name="tx_command_title">Run the setup command</string>
+    <string name="tx_command_body">Copy this command, paste it in Termux (long press, then Paste) and press Enter:</string>
+    <string name="tx_command_wait">Tap Allow when Termux asks for storage access. The first install can take 10 to 30 minutes because some parts are built on your phone. Keep Termux open until it prints Done.</string>
+    <string name="tx_command_button">Copy and open Termux</string>
+    <string name="tx_termux_missing">Install Termux first (step 1)</string>
+    <string name="tx_step_3">Step 3</string>
+    <string name="tx_permission_title">Let HexaPlayer start Termux</string>
+    <string name="tx_permission_body">With this permission, HexaPlayer starts the downloader in the background whenever you open the Download tab. Without it, you have to open Termux and type hexadl yourself each time.</string>
+    <string name="tx_permission_button">Allow</string>
+    <string name="tx_permission_granted">✓ Permission granted</string>
+    <string name="tx_permission_missing">Permission not granted yet</string>
+    <string name="tx_permission_denied">Permission denied. You can still type hexadl in Termux.</string>
+    <string name="tx_step_4">Step 4</string>
+    <string name="tx_start_title">Start the downloader</string>
+    <string name="tx_start_body">Termux then shows a notification while the downloader runs. To stop it, tap Exit in that notification.</string>
+    <string name="tx_start_button">Start now</string>
+    <string name="tx_start_manual">Open Termux and type hexadl, then come back</string>
+    <string name="tx_tips_label">Tips</string>
+    <string name="tx_tips_body">• If downloads stop when the screen is off, disable battery optimization for Termux in Android settings.\n• If the downloader says it cannot connect, run the setup command again: it is safe to repeat.\n• Music is saved in Music/HexaPlayer.</string>
+    <string name="tx_full_guide">Full guide on GitHub</string>
 </resources>

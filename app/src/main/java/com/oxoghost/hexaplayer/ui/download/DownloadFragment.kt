@@ -2,15 +2,11 @@ package com.oxoghost.hexaplayer.ui.download
 
 import android.Manifest
 import android.content.pm.PackageManager
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.provider.DocumentsContract
-import android.os.Environment
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
@@ -19,10 +15,13 @@ import androidx.fragment.app.activityViewModels
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.oxoghost.hexaplayer.R
 import com.oxoghost.hexaplayer.adapter.DownloadAdapter
-import com.oxoghost.hexaplayer.adapter.JamendoAdapter
+import com.oxoghost.hexaplayer.adapter.SyncAdapter
+import com.oxoghost.hexaplayer.data.JobKind
 import com.oxoghost.hexaplayer.databinding.FragmentDownloadBinding
+import com.oxoghost.hexaplayer.util.Termux
+import com.oxoghost.hexaplayer.util.toast
 import com.oxoghost.hexaplayer.viewmodel.DownloadViewModel
-import com.google.android.material.snackbar.Snackbar
+import com.oxoghost.hexaplayer.viewmodel.MusicViewModel
 
 class DownloadFragment : Fragment() {
 
@@ -30,22 +29,16 @@ class DownloadFragment : Fragment() {
     private val binding get() = _binding!!
 
     private val viewModel: DownloadViewModel by activityViewModels()
-    private lateinit var jamendoAdapter: JamendoAdapter
-    private lateinit var downloadAdapter: DownloadAdapter
+    private val musicViewModel: MusicViewModel by activityViewModels()
 
-    private val pickFolder = registerForActivityResult(
-        ActivityResultContracts.OpenDocumentTree()
-    ) { uri ->
-        if (uri != null) {
-            val path = uriToPath(uri) ?: uri.toString()
-            viewModel.downloadFolder = path
-            binding.tvFolderPath.text = path
-        }
-    }
+    private lateinit var jobAdapter: DownloadAdapter
+    private lateinit var syncAdapter: SyncAdapter
 
     private val requestWritePermission = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
-    ) { /* handled at download time */ }
+    ) { granted ->
+        if (granted) binding.bannerPermission.visibility = View.GONE
+    }
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?
@@ -60,113 +53,133 @@ class DownloadFragment : Fragment() {
         setupInputs()
         observeViewModel()
         ensureStoragePermission()
+        if (!isHidden) viewModel.onScreenShown()
+    }
+
+    override fun onHiddenChanged(hidden: Boolean) {
+        super.onHiddenChanged(hidden)
+        if (!hidden) viewModel.onScreenShown()
     }
 
     private fun setupRecyclerViews() {
-        jamendoAdapter = JamendoAdapter { track ->
-            viewModel.downloadTrack(track)
-        }
-        binding.rvResults.layoutManager = LinearLayoutManager(requireContext())
-        binding.rvResults.adapter = jamendoAdapter
+        jobAdapter = DownloadAdapter()
+        binding.rvJobs.layoutManager = LinearLayoutManager(requireContext())
+        binding.rvJobs.adapter = jobAdapter
+        binding.rvJobs.isNestedScrollingEnabled = false
 
-        downloadAdapter = DownloadAdapter { item -> viewModel.cancelDownload(item) }
-        binding.rvDownloads.layoutManager = LinearLayoutManager(requireContext())
-        binding.rvDownloads.adapter = downloadAdapter
+        syncAdapter = SyncAdapter { entry -> viewModel.resync(entry) }
+        binding.rvSyncs.layoutManager = LinearLayoutManager(requireContext())
+        binding.rvSyncs.adapter = syncAdapter
+        binding.rvSyncs.isNestedScrollingEnabled = false
     }
 
     private fun setupInputs() {
-        binding.tvFolderPath.text = viewModel.downloadFolder
+        binding.etServerUrl.setText(viewModel.serverUrl)
+        binding.etServerToken.setText(viewModel.serverToken)
+        binding.etFolder.setText(viewModel.customFolder)
+        binding.switchCustomFolder.isChecked = viewModel.useCustomFolder
+        binding.tilFolder.visibility =
+            if (viewModel.useCustomFolder) View.VISIBLE else View.GONE
 
-        // Restore saved client ID
-        binding.etClientId.setText(viewModel.jamendoClientId)
-        binding.etClientId.setOnFocusChangeListener { _, hasFocus ->
-            if (!hasFocus) {
-                viewModel.jamendoClientId = binding.etClientId.text?.toString()?.trim() ?: ""
-            }
+        binding.etServerUrl.setOnFocusChangeListener { _, hasFocus ->
+            if (!hasFocus) viewModel.serverUrl = binding.etServerUrl.text?.toString()?.trim() ?: ""
+        }
+        binding.etServerToken.setOnFocusChangeListener { _, hasFocus ->
+            if (!hasFocus) viewModel.serverToken = binding.etServerToken.text?.toString()?.trim() ?: ""
+        }
+        binding.etFolder.setOnFocusChangeListener { _, hasFocus ->
+            if (!hasFocus) viewModel.customFolder = binding.etFolder.text?.toString()?.trim() ?: ""
         }
 
-        binding.btnPickFolder.setOnClickListener {
-            pickFolder.launch(null)
+        binding.switchCustomFolder.setOnCheckedChangeListener { _, checked ->
+            viewModel.useCustomFolder = checked
+            binding.tilFolder.visibility = if (checked) View.VISIBLE else View.GONE
         }
 
-        binding.btnSearch.setOnClickListener { startSearch() }
-
-        binding.etSearch.setOnEditorActionListener { _, actionId, _ ->
-            if (actionId == EditorInfo.IME_ACTION_SEARCH) {
-                startSearch()
-                true
-            } else false
+        binding.btnTestConnection.setOnClickListener {
+            saveServerFields()
+            viewModel.testConnection()
         }
 
-        binding.btnClearDone.setOnClickListener {
-            viewModel.clearFinished()
+        binding.btnDownload.setOnClickListener { submit(JobKind.DOWNLOAD) }
+        binding.btnSync.setOnClickListener { submit(JobKind.SYNC) }
+
+        binding.btnClearDone.setOnClickListener { viewModel.clearFinished() }
+
+        binding.btnGrantPermission.setOnClickListener {
+            requestWritePermission.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+        }
+
+        binding.btnSetupGuide.setOnClickListener { openSetupGuide() }
+
+        binding.btnStartServer.setOnClickListener {
+            saveServerFields()
+            if (Termux.canStartServer(requireContext())) viewModel.startServer()
+            else openSetupGuide()
         }
     }
 
-    private fun startSearch() {
-        // Save client ID before searching
-        viewModel.jamendoClientId = binding.etClientId.text?.toString()?.trim() ?: ""
+    private fun openSetupGuide() {
+        val fm = requireActivity().supportFragmentManager
+        if (fm.findFragmentByTag(TermuxSetupFragment.TAG) != null) return
+        fm.beginTransaction()
+            .setCustomAnimations(R.anim.slide_up, R.anim.slide_down, R.anim.slide_up, R.anim.slide_down)
+            .add(android.R.id.content, TermuxSetupFragment(), TermuxSetupFragment.TAG)
+            .addToBackStack(TermuxSetupFragment.TAG)
+            .commit()
+    }
 
-        val query = binding.etSearch.text?.toString()?.trim() ?: ""
-        if (query.isEmpty()) {
-            binding.tilSearch.error = getString(R.string.dl_error_empty_query)
+    private fun saveServerFields() {
+        viewModel.serverUrl = binding.etServerUrl.text?.toString()?.trim() ?: ""
+        viewModel.serverToken = binding.etServerToken.text?.toString()?.trim() ?: ""
+        viewModel.customFolder = binding.etFolder.text?.toString()?.trim() ?: ""
+    }
+
+    private fun submit(kind: JobKind) {
+        saveServerFields()
+        val link = binding.etLink.text?.toString()?.trim() ?: ""
+        if (link.isEmpty()) {
+            binding.tilLink.error = getString(R.string.dl_error_empty_link)
             return
         }
-        binding.tilSearch.error = null
-        viewModel.search(query)
+        binding.tilLink.error = null
+        viewModel.submit(link, kind)
+        binding.etLink.text?.clear()
         hideKeyboard()
     }
 
     private fun observeViewModel() {
-        viewModel.searchResults.observe(viewLifecycleOwner) { results ->
-            jamendoAdapter.submitList(results)
-            updateSections(results.size, viewModel.downloads.value?.size ?: 0)
-            if (results.isNotEmpty()) {
-                binding.tvResultsHeader.text = getString(R.string.dl_results_header, results.size)
-            }
+        viewModel.jobs.observe(viewLifecycleOwner) { list ->
+            jobAdapter.submitList(list)
+            binding.sectionJobs.visibility = if (list.isEmpty()) View.GONE else View.VISIBLE
         }
 
-        viewModel.isSearching.observe(viewLifecycleOwner) { searching ->
-            binding.progressSearch.visibility = if (searching) View.VISIBLE else View.GONE
-            binding.btnSearch.isEnabled = !searching
-            if (searching) {
-                binding.tvEmpty.visibility = View.GONE
-                binding.scrollContent.visibility = View.GONE
-            } else {
-                updateSections(
-                    viewModel.searchResults.value?.size ?: 0,
-                    viewModel.downloads.value?.size ?: 0
-                )
-            }
+        viewModel.syncs.observe(viewLifecycleOwner) { list ->
+            syncAdapter.submitList(list)
+            binding.sectionSyncs.visibility = if (list.isEmpty()) View.GONE else View.VISIBLE
         }
 
-        viewModel.downloads.observe(viewLifecycleOwner) { list ->
-            downloadAdapter.submitList(list.toList())
-            updateSections(viewModel.searchResults.value?.size ?: 0, list.size)
+        viewModel.connectionStatus.observe(viewLifecycleOwner) { status ->
+            binding.tvConnectionStatus.text = status ?: ""
+        }
+
+        viewModel.connected.observe(viewLifecycleOwner) { connected ->
+            binding.sectionSetup.visibility = if (connected) View.GONE else View.VISIBLE
         }
 
         viewModel.toastMessage.observe(viewLifecycleOwner) { msg ->
             if (msg != null) {
-                Snackbar.make(requireView(), msg, Snackbar.LENGTH_SHORT).show()
+                requireContext().toast(msg)
                 viewModel.clearToastMessage()
             }
         }
-    }
 
-    private fun updateSections(resultCount: Int, downloadCount: Int) {
-        val hasResults = resultCount > 0
-        val hasDownloads = downloadCount > 0
-        val hasContent = hasResults || hasDownloads
-
-        binding.sectionResults.visibility = if (hasResults) View.VISIBLE else View.GONE
-        binding.sectionDownloads.visibility = if (hasDownloads) View.VISIBLE else View.GONE
-        binding.dividerSections.visibility =
-            if (hasResults && hasDownloads) View.VISIBLE else View.GONE
-
-        val isSearching = viewModel.isSearching.value == true
-        binding.scrollContent.visibility = if (hasContent && !isSearching) View.VISIBLE else View.GONE
-        binding.tvEmpty.visibility =
-            if (!hasContent && !isSearching) View.VISIBLE else View.GONE
+        viewModel.libraryChanged.observe(viewLifecycleOwner) { changed ->
+            if (changed) {
+                musicViewModel.loadLibrary()
+                viewModel.consumeLibraryChanged()
+            }
+        }
     }
 
     private fun ensureStoragePermission() {
@@ -175,23 +188,8 @@ class DownloadFragment : Fragment() {
                     requireContext(), Manifest.permission.WRITE_EXTERNAL_STORAGE
                 ) != PackageManager.PERMISSION_GRANTED
             ) {
-                requestWritePermission.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
                 binding.bannerPermission.visibility = View.VISIBLE
             }
-        }
-    }
-
-    private fun uriToPath(uri: Uri): String? {
-        return try {
-            val docId = DocumentsContract.getTreeDocumentId(uri)
-            val parts = docId.split(":")
-            if (parts.getOrNull(0) == "primary") {
-                val sub = parts.getOrNull(1) ?: ""
-                val base = Environment.getExternalStorageDirectory().absolutePath
-                if (sub.isEmpty()) base else "$base/$sub"
-            } else null
-        } catch (e: Exception) {
-            null
         }
     }
 

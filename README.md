@@ -6,7 +6,6 @@ A **free**, open-source music player for Android.
 ![GitHub Repo stars](https://img.shields.io/github/stars/oxoghost01/hexaplayer?style=for-the-badge)
 ![GitHub Downloads (all assets, latest release)](https://img.shields.io/github/downloads/oxoghost01/hexaplayer/latest/total?style=for-the-badge)
 
-[![Poll](https://markpoll.oxoghost.dev/p/01KRG9WFR6XT7QR2DQ6477TPN7/svg)](https://markpoll.oxoghost.dev/p/01KRG9WFR6XT7QR2DQ6477TPN7)
 
 ## Features
 
@@ -19,7 +18,7 @@ A **free**, open-source music player for Android.
 - **Sleep timer** : stop playback after a preset time (15 / 30 / 45 / 60 min) or a custom duration (10 s – 10 h)
 - **Lyrics** : synced (LRC) and plain lyrics via [LRCLIB](https://lrclib.net), displayed in the full-screen player
 - **Song metadata editing** : edit title, artist, and album directly from the 3-dot menu
-- **Downloader** : download songs directly in the app by title, style, or artist
+- **Spotify download & sync** : download playlists, albums, or tracks from a Spotify link and keep playlists in sync, powered by [spotDL](https://github.com/spotDL/spotify-downloader) running locally on your phone via Termux ([one-time setup](termux/README.md))
 - **Android Auto** : full media browser (Songs, Albums, Artists, Playlists, Folders) with voice search; shuffle and repeat behave identically to the phone app
 - **Widgets** : 4×1 and 5×1 home-screen widgets with album art and playback controls
 - **Auto-updates** : in-app update checker; notifies you when a new version is available
