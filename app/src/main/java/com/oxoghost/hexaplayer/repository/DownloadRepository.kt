@@ -9,7 +9,6 @@ import org.json.JSONObject
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
-import java.net.URLEncoder
 
 /** Snapshot of a server-side job (`GET /jobs/{id}`). */
 data class ServerJob(
@@ -18,14 +17,8 @@ data class ServerJob(
     val total: Int,
     val message: String,
     val error: String?,
-    val folders: List<String>
-)
-
-/** An audio file on the server (`GET /tree`). */
-data class RemoteFile(
-    val path: String,
-    val size: Long,
-    val mtime: Long
+    val folders: List<String>,
+    val files: List<String>
 )
 
 /** Result of `GET /health`. */
@@ -56,12 +49,14 @@ class DownloadRepository {
         token: String,
         link: String,
         kind: JobKind,
-        folder: String?
+        folder: String?,
+        root: String?
     ): String = withContext(Dispatchers.IO) {
         val body = JSONObject().apply {
             put("url", link)
             put("kind", if (kind == JobKind.SYNC) "sync" else "download")
             if (!folder.isNullOrBlank()) put("folder", folder)
+            if (!root.isNullOrBlank()) put("root", root)
         }
         val json = httpPost(url(server, "/jobs"), token, body.toString())
         JSONObject(json).getString("id")
@@ -73,27 +68,22 @@ class DownloadRepository {
             val obj = JSONObject(json)
             val foldersArr = obj.optJSONArray("folders") ?: JSONArray()
             val folders = (0 until foldersArr.length()).map { foldersArr.getString(it) }
+            val filesArr = obj.optJSONArray("files") ?: JSONArray()
+            val files = (0 until filesArr.length()).map { filesArr.getString(it) }
             ServerJob(
                 status = obj.optString("status", "running"),
                 done = obj.optInt("done", 0),
                 total = obj.optInt("total", 0),
                 message = obj.optString("message", ""),
                 error = obj.optString("error", "").ifBlank { null },
-                folders = folders
+                folders = folders,
+                files = files
             )
         }
 
-    suspend fun tree(server: String, token: String, folder: String?): List<RemoteFile> =
-        withContext(Dispatchers.IO) {
-            val path = if (folder.isNullOrBlank()) "/tree"
-            else "/tree?folder=${URLEncoder.encode(folder, "UTF-8")}"
-            val json = httpGet(url(server, path), token)
-            val arr = JSONObject(json).optJSONArray("files") ?: JSONArray()
-            (0 until arr.length()).map { i ->
-                val f = arr.getJSONObject(i)
-                RemoteFile(f.getString("path"), f.optLong("size"), f.optLong("mtime"))
-            }
-        }
+    suspend fun stopJob(server: String, token: String, jobId: String) {
+        withContext(Dispatchers.IO) { httpPost(url(server, "/jobs/$jobId/stop"), token, "{}") }
+    }
 
     suspend fun listSyncs(server: String, token: String): List<SyncEntry> =
         withContext(Dispatchers.IO) {
@@ -104,6 +94,7 @@ class DownloadRepository {
                 SyncEntry(
                     url = s.optString("url"),
                     folder = s.optString("folder"),
+                    root = s.optString("root"),
                     name = s.optString("name").ifBlank { "Playlist" }
                 )
             }

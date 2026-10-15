@@ -3,6 +3,7 @@ package com.oxoghost.hexaplayer.adapter
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.ProgressBar
 import android.widget.TextView
@@ -14,7 +15,10 @@ import com.oxoghost.hexaplayer.data.JobKind
 import com.oxoghost.hexaplayer.data.JobPhase
 import com.oxoghost.hexaplayer.data.SpotdlJob
 
-class DownloadAdapter : ListAdapter<SpotdlJob, DownloadAdapter.ViewHolder>(DIFF) {
+class DownloadAdapter(
+    private val onStop: (SpotdlJob) -> Unit,
+    private val onRetry: (SpotdlJob) -> Unit
+) : ListAdapter<SpotdlJob, DownloadAdapter.ViewHolder>(DIFF) {
 
     companion object {
         private val DIFF = object : DiffUtil.ItemCallback<SpotdlJob>() {
@@ -28,6 +32,7 @@ class DownloadAdapter : ListAdapter<SpotdlJob, DownloadAdapter.ViewHolder>(DIFF)
         val title: TextView = itemView.findViewById(R.id.tv_job_title)
         val status: TextView = itemView.findViewById(R.id.tv_job_status)
         val progress: ProgressBar = itemView.findViewById(R.id.progress_job)
+        val action: ImageButton = itemView.findViewById(R.id.btn_job_action)
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
@@ -73,11 +78,30 @@ class DownloadAdapter : ListAdapter<SpotdlJob, DownloadAdapter.ViewHolder>(DIFF)
                 holder.progress.isIndeterminate = false
                 holder.progress.progress = 100
             }
+            JobPhase.STOPPED -> {
+                holder.status.text = ctx.getString(R.string.dl_status_stopped, job.message)
+                holder.progress.isIndeterminate = false
+                holder.progress.progress = 0
+            }
             JobPhase.ERROR -> {
                 holder.status.text = ctx.getString(R.string.dl_status_error, job.error ?: "unknown")
                 holder.progress.isIndeterminate = false
                 holder.progress.progress = 0
             }
         }
+
+        when (job.phase) {
+            JobPhase.SERVER -> holder.action.bindAction(R.drawable.ic_close, R.string.dl_stop) { onStop(job) }
+            JobPhase.STOPPED, JobPhase.ERROR ->
+                holder.action.bindAction(R.drawable.ic_replay, R.string.dl_retry) { onRetry(job) }
+            else -> holder.action.visibility = View.GONE
+        }
+    }
+
+    private fun ImageButton.bindAction(icon: Int, label: Int, onClick: () -> Unit) {
+        visibility = View.VISIBLE
+        setImageResource(icon)
+        contentDescription = context.getString(label)
+        setOnClickListener { onClick() }
     }
 }

@@ -3,6 +3,7 @@ package com.oxoghost.hexaplayer.viewmodel
 import android.app.Application
 import android.content.Context
 import android.media.MediaScannerConnection
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
@@ -48,10 +49,9 @@ class DownloadViewModel(application: Application) : AndroidViewModel(application
 
     private val idCounter = AtomicLong(System.currentTimeMillis())
 
-    /** Absolute path of the server's download root on this device (from /health). */
-    private var serverRoot: String = ""
-
     private var connectJob: Job? = null
+
+    private val stopping = mutableSetOf<Long>()
 
     // --- Settings ---------------------------------------------------------- //
 
@@ -97,6 +97,7 @@ class DownloadViewModel(application: Application) : AndroidViewModel(application
                 onConnected(repo.health(server, serverToken))
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
+                Log.w(TAG, "Health check failed", e)
                 if (autoStart && isLocalServer() && Termux.canStartServer(getApplication())) {
                     launchServerAndWait()
                 } else {
@@ -128,11 +129,10 @@ class DownloadViewModel(application: Application) : AndroidViewModel(application
             } catch (_: Exception) { }
         }
         _connected.value = false
-        _connectionStatus.value = "Downloader did not start. Did the setup finish in Termux?"
+        _connectionStatus.value = "Downloader did not start. Run the setup command in Termux again."
     }
 
     private fun onConnected(health: ServerHealth) {
-        serverRoot = health.root
         _connected.value = true
         _connectionStatus.value = "Connected · spotDL ${health.version}"
         refreshSyncs()
@@ -163,44 +163,60 @@ class DownloadViewModel(application: Application) : AndroidViewModel(application
             return
         }
         val folder = if (useCustomFolder && customFolder.isNotBlank()) customFolder else null
-        val label = folder ?: prettyLabel(url)
+        startJob(kind, url, folder ?: prettyLabel(url), folder, libraryFolder())
+    }
+
+    /** Re-sync an already-saved playlist. */
+    fun resync(entry: SyncEntry) {
+        startJob(JobKind.SYNC, entry.url, entry.name, entry.folder.ifBlank { null }, entry.root.ifBlank { null })
+    }
+
+    /** Runs a stopped or failed job again. spotDL skips the tracks already on disk. */
+    fun retry(job: SpotdlJob) {
+        _jobs.value = (_jobs.value ?: emptyList()).filter { it.id != job.id }
+        startJob(job.kind, job.url, job.label, job.folder, job.root)
+    }
+
+    fun stop(job: SpotdlJob) {
+        val serverId = job.serverId ?: return
+        stopping += job.id
+        upsert(job.copy(message = "Stopping…"))
+        viewModelScope.launch {
+            try {
+                repo.stopJob(serverUrl, serverToken, serverId)
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                _toastMessage.value = "Could not stop: ${e.message?.take(100)}"
+            }
+        }
+    }
+
+    private fun startJob(kind: JobKind, url: String, label: String, folder: String?, root: String?) {
         val job = SpotdlJob(
             id = idCounter.incrementAndGet(),
             kind = kind,
             url = url,
             label = label,
+            folder = folder,
+            root = root,
             phase = JobPhase.QUEUED,
             message = if (kind == JobKind.SYNC) "Preparing sync…" else "Preparing download…"
         )
         upsert(job)
-        runJob(job, folder)
+        runJob(job)
     }
 
-    /** Re-sync an already-saved playlist. */
-    fun resync(entry: SyncEntry) {
-        val job = SpotdlJob(
-            id = idCounter.incrementAndGet(),
-            kind = JobKind.SYNC,
-            url = entry.url,
-            label = entry.name,
-            phase = JobPhase.QUEUED,
-            message = "Preparing sync…"
-        )
-        upsert(job)
-        runJob(job, entry.folder.ifBlank { null })
-    }
+    /** The Music Library folder from Settings (relative to storage), if any. */
+    private fun libraryFolder(): String? =
+        getApplication<Application>().getSharedPreferences("hexa_prefs", Context.MODE_PRIVATE)
+            .getString("music_folder", "")?.trim()?.trim('/')?.ifBlank { null }
 
-    private fun runJob(job: SpotdlJob, folder: String?) {
+    private fun runJob(job: SpotdlJob) {
         val server = serverUrl
         val token = serverToken
         viewModelScope.launch {
             try {
-                // Make sure we know the server's download root for indexing.
-                if (serverRoot.isBlank()) {
-                    serverRoot = repo.health(server, token).root
-                }
-
-                val serverId = repo.startJob(server, token, job.url, job.kind, folder)
+                val serverId = repo.startJob(server, token, job.url, job.kind, job.folder, job.root)
                 var current = job.copy(
                     serverId = serverId,
                     phase = JobPhase.SERVER,
@@ -208,19 +224,19 @@ class DownloadViewModel(application: Application) : AndroidViewModel(application
                 )
                 upsert(current)
 
-                // Poll until the server finishes.
                 while (true) {
                     delay(1500)
                     val s = repo.pollJob(server, token, serverId)
                     current = current.copy(
                         serverDone = s.done,
                         serverTotal = s.total,
-                        message = s.message
+                        message = if (job.id in stopping && s.status == "running") "Stopping…" else s.message
                     )
                     upsert(current)
+                    if (s.status != "running") stopping -= job.id
                     when (s.status) {
-                        "done" -> {
-                            indexFiles(current, server, token, s.folders, folder)
+                        "done", "stopped" -> {
+                            indexFiles(current, s.files, if (s.status == "done") JobPhase.DONE else JobPhase.STOPPED)
                             return@launch
                         }
                         "error" -> {
@@ -233,50 +249,20 @@ class DownloadViewModel(application: Application) : AndroidViewModel(application
                     }
                 }
             } catch (e: Exception) {
+                if (e is CancellationException) throw e
                 upsert(job.copy(phase = JobPhase.ERROR, error = e.message?.take(150)))
             }
         }
     }
 
-    /**
-     * The files are already on the phone (spotDL wrote them into the shared
-     * Music folder). We just tell MediaStore to index them so they show up in
-     * the library.
-     */
-    private suspend fun indexFiles(
-        job: SpotdlJob,
-        server: String,
-        token: String,
-        folders: List<String>,
-        requestedFolder: String?
-    ) {
-        val targetFolders = when {
-            !requestedFolder.isNullOrBlank() -> listOf(requestedFolder)
-            folders.isNotEmpty() -> folders
-            else -> listOf("")
-        }
-
-        val remoteFiles = targetFolders.flatMap { f ->
-            try {
-                repo.tree(server, token, f.ifBlank { null })
-            } catch (_: Exception) {
-                emptyList()
-            }
-        }.distinctBy { it.path }
-
-        upsert(job.copy(phase = JobPhase.IMPORTING, message = "Adding to library…"))
-
-        val root = serverRoot.trimEnd('/')
-        if (root.isNotBlank() && remoteFiles.isNotEmpty()) {
-            scanFiles(remoteFiles.map { "$root/${it.path}" }.toTypedArray())
+    /** spotDL already wrote the files to shared storage; MediaStore just has to index them. */
+    private suspend fun indexFiles(job: SpotdlJob, files: List<String>, phase: JobPhase) {
+        if (files.isNotEmpty()) {
+            upsert(job.copy(phase = JobPhase.IMPORTING, message = "Adding to library…"))
+            scanFiles(files.toTypedArray())
             _libraryChanged.value = true
         }
-
-        upsert(job.copy(
-            phase = JobPhase.DONE,
-            message = if (remoteFiles.isEmpty()) "No files found"
-            else "${remoteFiles.size} track(s) in your library"
-        ))
+        upsert(job.copy(phase = phase))
         if (job.kind == JobKind.SYNC) refreshSyncs()
     }
 
@@ -289,7 +275,7 @@ class DownloadViewModel(application: Application) : AndroidViewModel(application
 
     fun clearFinished() {
         _jobs.value = (_jobs.value ?: emptyList()).filter {
-            it.phase != JobPhase.DONE && it.phase != JobPhase.ERROR
+            it.phase != JobPhase.DONE && it.phase != JobPhase.ERROR && it.phase != JobPhase.STOPPED
         }
     }
 
@@ -312,6 +298,7 @@ class DownloadViewModel(application: Application) : AndroidViewModel(application
     }
 
     companion object {
+        private const val TAG = "DownloadViewModel"
         private const val DEFAULT_URL = "http://127.0.0.1:47823"
         private const val OLD_DEFAULT_URL = "http://127.0.0.1:8000"
     }

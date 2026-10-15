@@ -62,7 +62,10 @@ class DownloadFragment : Fragment() {
     }
 
     private fun setupRecyclerViews() {
-        jobAdapter = DownloadAdapter()
+        jobAdapter = DownloadAdapter(
+            onStop = { job -> viewModel.stop(job) },
+            onRetry = { job -> viewModel.retry(job) }
+        )
         binding.rvJobs.layoutManager = LinearLayoutManager(requireContext())
         binding.rvJobs.adapter = jobAdapter
         binding.rvJobs.isNestedScrollingEnabled = false

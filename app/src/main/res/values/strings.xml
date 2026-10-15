@@ -110,7 +110,7 @@
     <!-- Link + folder -->
     <string name="dl_link_hint">Spotify link (playlist, album or track)</string>
     <string name="dl_custom_folder_switch">Use a custom folder name</string>
-    <string name="dl_folder_auto_hint">By default, playlists/albums go into a folder named after them.</string>
+    <string name="dl_folder_auto_hint">Downloads go to your Music Library folder (Settings), or Music/HexaPlayer if none is set. Playlists and albums get a folder named after them.</string>
     <string name="dl_folder_name_hint">Folder name</string>
     <string name="dl_download">Download</string>
     <string name="dl_sync">Sync</string>
@@ -132,6 +132,9 @@
     <string name="dl_permission_banner">Storage permission needed to save downloads.</string>
     <string name="dl_permission_grant">Grant</string>
     <string name="dl_status_error">Error: %s</string>
+    <string name="dl_status_stopped">Stopped. %s</string>
+    <string name="dl_stop">Stop</string>
+    <string name="dl_retry">Run again</string>
     <string name="dl_setup_command">apt update &amp;&amp; apt full-upgrade -y &amp;&amp; curl -fsSL https://raw.githubusercontent.com/OxoGhost01/HexaPlayer/main/termux/setup.sh | bash</string>
     <string name="permission_rationale">HexaPlayer needs access to your audio files to play music.</string>
     <string name="songs_count">%d songs</string>

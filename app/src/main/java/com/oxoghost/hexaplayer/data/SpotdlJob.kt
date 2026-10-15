@@ -10,6 +10,8 @@ data class SpotdlJob(
     val kind: JobKind,
     val url: String,
     val label: String,
+    val folder: String? = null,
+    val root: String? = null,
     val serverId: String? = null,
     val phase: JobPhase = JobPhase.QUEUED,
     val serverDone: Int = 0,
@@ -31,6 +33,7 @@ enum class JobPhase {
     IMPORTING,
 
     DONE,
+    STOPPED,
     ERROR
 }
 
@@ -38,5 +41,6 @@ enum class JobPhase {
 data class SyncEntry(
     val url: String,
     val folder: String,
+    val root: String,
     val name: String
 )
