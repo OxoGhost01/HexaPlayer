@@ -24,6 +24,7 @@ object WidgetController {
     private const val KEY_ARTIST   = "widget_artist"
     private const val KEY_ALBUM_ID = "widget_album_id"
     private const val KEY_PLAYING  = "widget_is_playing"
+    private const val ART_SIZE_PX  = 300
 
     fun saveState(context: Context, title: String, artist: String, albumId: Long, isPlaying: Boolean) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
@@ -52,7 +53,12 @@ object WidgetController {
             val uri = ContentUris.withAppendedId(
                 Uri.parse("content://media/external/audio/albumart"), albumId
             )
-            val raw = context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it) }
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
+            var sample = 1
+            while (minOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= ART_SIZE_PX) sample *= 2
+            val opts = BitmapFactory.Options().apply { inSampleSize = sample }
+            val raw = context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, opts) }
                 ?: return null
             val size = minOf(raw.width, raw.height)
             val x = (raw.width - size) / 2

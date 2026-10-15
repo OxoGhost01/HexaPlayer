@@ -32,7 +32,7 @@ class HexaWidget5x1 : AppWidgetProvider() {
 
             val title = WidgetController.getTitle(context).ifBlank { "Not playing" }
             val artist = WidgetController.getArtist(context)
-            val songInfo = if (artist.isNotBlank()) "$title  —  $artist" else title
+            val songInfo = if (artist.isNotBlank()) "$title  ·  $artist" else title
             views.setTextViewText(R.id.widget_song_info, songInfo)
 
             val albumId = WidgetController.getAlbumId(context)
