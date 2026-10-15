@@ -258,7 +258,9 @@ def health(_: None = Depends(require_token)) -> dict:
 
 @app.post("/jobs")
 def create_job(req: JobRequest, _: None = Depends(require_token)) -> dict:
-    url = req.url.strip()
+    # Drop "?si=..." share codes so the same playlist always maps to one sync file
+    raw_url = req.url.strip()
+    url = raw_url.split("?")[0].split("#")[0]
     if not url:
         raise HTTPException(status_code=400, detail="Missing url")
 
@@ -274,6 +276,11 @@ def create_job(req: JobRequest, _: None = Depends(require_token)) -> dict:
 
     if kind == "sync":
         sync_file = _sync_file_for(url)
+        legacy = _sync_file_for(raw_url)
+        if legacy != sync_file and legacy.exists() and not sync_file.exists():
+            # Saved before share codes were stripped: move it to the clean URL
+            legacy.rename(sync_file)
+            legacy.with_suffix(".json").unlink(missing_ok=True)
         if sync_file.exists():
             # Re-sync from the saved file (adds new, removes deleted tracks).
             cmd = [*base, "sync", str(sync_file)]
