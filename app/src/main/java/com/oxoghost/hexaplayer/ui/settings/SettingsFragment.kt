@@ -22,7 +22,7 @@ import com.oxoghost.hexaplayer.R
 import com.oxoghost.hexaplayer.databinding.FragmentSettingsBinding
 import com.oxoghost.hexaplayer.repository.UpdateRepository
 import com.oxoghost.hexaplayer.util.dpToPx
-import com.google.android.material.snackbar.Snackbar
+import com.oxoghost.hexaplayer.util.toast
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -137,7 +137,7 @@ class SettingsFragment : Fragment() {
         viewModel.isLoading.observe(viewLifecycleOwner) { loading ->
             if (!loading) {
                 binding.btnScan.isEnabled = true
-                Snackbar.make(requireView(), getString(R.string.settings_scan_done), Snackbar.LENGTH_SHORT).show()
+                requireContext().toast(getString(R.string.settings_scan_done))
                 viewModel.isLoading.removeObservers(viewLifecycleOwner)
             }
         }

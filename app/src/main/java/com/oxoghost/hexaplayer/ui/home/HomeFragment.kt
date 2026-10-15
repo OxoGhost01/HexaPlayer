@@ -26,6 +26,11 @@ import androidx.fragment.app.activityViewModels
 import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import coil3.load
+import coil3.request.crossfade
+import coil3.request.error
+import coil3.request.placeholder
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.oxoghost.hexaplayer.R
 import com.oxoghost.hexaplayer.adapter.AlbumAdapter
 import com.oxoghost.hexaplayer.adapter.ArtistAdapter
@@ -40,10 +45,8 @@ import com.oxoghost.hexaplayer.databinding.DialogCreatePlaylistBinding
 import com.oxoghost.hexaplayer.databinding.DialogEditSongBinding
 import com.oxoghost.hexaplayer.databinding.FragmentHomeBinding
 import com.oxoghost.hexaplayer.util.themeColor
+import com.oxoghost.hexaplayer.util.toast
 import com.oxoghost.hexaplayer.viewmodel.MusicViewModel
-import com.google.android.material.dialog.MaterialAlertDialogBuilder
-import com.google.android.material.snackbar.Snackbar
-import coil.load
 
 class HomeFragment : Fragment() {
 
@@ -95,9 +98,9 @@ class HomeFragment : Fragment() {
             try {
                 requireContext().contentResolver.update(uri, values, null, null)
                 viewModel.loadLibrary()
-                Snackbar.make(requireView(), getString(R.string.song_info_updated), Snackbar.LENGTH_SHORT).show()
+                requireContext().toast(getString(R.string.song_info_updated))
             } catch (_: Exception) {
-                Snackbar.make(requireView(), getString(R.string.metadata_permission_needed), Snackbar.LENGTH_SHORT).show()
+                requireContext().toast(getString(R.string.metadata_permission_needed))
             }
         }
     }
@@ -232,7 +235,7 @@ class HomeFragment : Fragment() {
     }
 
     private fun setupSwipeToPlayNext() {
-        val accentColor = requireContext().themeColor(com.google.android.material.R.attr.colorPrimary)
+        val accentColor = requireContext().themeColor(androidx.appcompat.R.attr.colorPrimary)
 
         val callback = object : ItemTouchHelper.SimpleCallback(0, ItemTouchHelper.RIGHT) {
             override fun onMove(rv: RecyclerView, vh: RecyclerView.ViewHolder, t: RecyclerView.ViewHolder) = false
@@ -258,7 +261,7 @@ class HomeFragment : Fragment() {
                 binding.recyclerView.adapter?.notifyItemChanged(pos)
                 if (song != null) {
                     viewModel.addToQueueLast(song)
-                    Snackbar.make(requireView(), getString(R.string.added_to_queue), Snackbar.LENGTH_SHORT).show()
+                    requireContext().toast(getString(R.string.added_to_queue))
                 }
             }
 
@@ -703,11 +706,11 @@ class HomeFragment : Fragment() {
                 0 -> showAddToPlaylistDialog(song)
                 1 -> {
                     viewModel.addToQueueNext(song)
-                    Snackbar.make(requireView(), getString(R.string.plays_next), Snackbar.LENGTH_SHORT).show()
+                    requireContext().toast(getString(R.string.plays_next))
                 }
                 2 -> {
                     viewModel.addToQueueLast(song)
-                    Snackbar.make(requireView(), getString(R.string.added_to_queue), Snackbar.LENGTH_SHORT).show()
+                    requireContext().toast(getString(R.string.added_to_queue))
                 }
                 3 -> showEditSongDialog(song)
             }
@@ -779,7 +782,7 @@ class HomeFragment : Fragment() {
         try {
             requireContext().contentResolver.update(song.uri, values, null, null)
             viewModel.loadLibrary()
-            Snackbar.make(requireView(), getString(R.string.song_info_updated), Snackbar.LENGTH_SHORT).show()
+            requireContext().toast(getString(R.string.song_info_updated))
         } catch (e: SecurityException) {
             when {
                 Build.VERSION.SDK_INT >= Build.VERSION_CODES.R -> {
@@ -802,10 +805,10 @@ class HomeFragment : Fragment() {
                         pendingSongUri = song.uri
                         writeRequestLauncher.launch(IntentSenderRequest.Builder(sender).build())
                     } else {
-                        Snackbar.make(requireView(), getString(R.string.metadata_permission_needed), Snackbar.LENGTH_SHORT).show()
+                        requireContext().toast(getString(R.string.metadata_permission_needed))
                     }
                 }
-                else -> Snackbar.make(requireView(), getString(R.string.metadata_permission_needed), Snackbar.LENGTH_SHORT).show()
+                else -> requireContext().toast(getString(R.string.metadata_permission_needed))
             }
         }
     }
@@ -823,9 +826,7 @@ class HomeFragment : Fragment() {
                     }
                 } else {
                     viewModel.addSongToPlaylist(playlists[which - 1].id, song.id)
-                    Snackbar.make(
-                        requireView(), getString(R.string.song_added), Snackbar.LENGTH_SHORT
-                    ).show()
+                    requireContext().toast(getString(R.string.song_added))
                 }
             }
             .show()
@@ -859,9 +860,7 @@ class HomeFragment : Fragment() {
                 if (name.isNotEmpty()) {
                     val playlist = viewModel.createPlaylist(name, selectedCoverUri?.toString())
                     onCreated?.invoke(playlist)
-                    Snackbar.make(
-                        requireView(), getString(R.string.playlist_created), Snackbar.LENGTH_SHORT
-                    ).show()
+                    requireContext().toast(getString(R.string.playlist_created))
                 }
             }
             .setNegativeButton(getString(R.string.cancel), null)
@@ -909,7 +908,7 @@ class HomeFragment : Fragment() {
                     newName = name,
                     newCoverUri = selectedCoverUri?.toString()
                 )
-                Snackbar.make(requireView(), getString(R.string.playlist_updated), Snackbar.LENGTH_SHORT).show()
+                requireContext().toast(getString(R.string.playlist_updated))
             }
             .setNegativeButton(getString(R.string.cancel), null)
             .show()
@@ -920,9 +919,7 @@ class HomeFragment : Fragment() {
         val currentIds = playlist.songIds.toSet()
         val available = allSongs.filter { it.id !in currentIds }
         if (available.isEmpty()) {
-            Snackbar.make(
-                requireView(), getString(R.string.no_songs_to_add), Snackbar.LENGTH_SHORT
-            ).show()
+            requireContext().toast(getString(R.string.no_songs_to_add))
             return
         }
         val names = available.map { "${it.title}  ·  ${it.artist}" }.toTypedArray()
@@ -941,9 +938,7 @@ class HomeFragment : Fragment() {
                     if (updated != null && currentDetail is DetailEntry.PlaylistDetail) {
                         currentDetail = DetailEntry.PlaylistDetail(updated)
                     }
-                    Snackbar.make(
-                        requireView(), getString(R.string.songs_added), Snackbar.LENGTH_SHORT
-                    ).show()
+                    requireContext().toast(getString(R.string.songs_added))
                     updateDisplay()
                 }
             }
@@ -960,9 +955,7 @@ class HomeFragment : Fragment() {
                 0 -> showEditPlaylistDialog(playlist)
                 1 -> {
                     viewModel.deletePlaylist(playlist.id)
-                    Snackbar.make(
-                        requireView(), getString(R.string.playlist_deleted), Snackbar.LENGTH_SHORT
-                    ).show()
+                    requireContext().toast(getString(R.string.playlist_deleted))
                 }
             }
             true

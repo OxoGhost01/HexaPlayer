@@ -9,7 +9,6 @@ import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.content.res.ColorStateList
 import android.graphics.Bitmap
-import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.Build
@@ -31,9 +30,13 @@ import androidx.core.view.updatePadding
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.palette.graphics.Palette
-import coil.imageLoader
-import coil.request.ImageRequest
-import com.google.android.material.snackbar.Snackbar
+import coil3.BitmapImage
+import coil3.imageLoader
+import coil3.request.ImageRequest
+import coil3.request.allowHardware
+import coil3.request.error
+import coil3.request.placeholder
+import coil3.request.target
 import com.oxoghost.hexaplayer.BuildConfig
 import com.oxoghost.hexaplayer.R
 import com.oxoghost.hexaplayer.adapter.SongAdapter
@@ -47,12 +50,13 @@ import com.oxoghost.hexaplayer.ui.home.HomeFragment
 import com.oxoghost.hexaplayer.ui.player.PlayerFragment
 import com.oxoghost.hexaplayer.ui.settings.SettingsFragment
 import com.oxoghost.hexaplayer.ui.update.UpdateFragment
+import com.oxoghost.hexaplayer.util.toast
 import com.oxoghost.hexaplayer.util.themeColor
 import com.oxoghost.hexaplayer.viewmodel.MusicViewModel
+import kotlin.math.abs
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlin.math.abs
 
 class MainActivity : AppCompatActivity() {
 
@@ -198,7 +202,7 @@ class MainActivity : AppCompatActivity() {
             }
             true
         }
-        val primary = themeColor(com.google.android.material.R.attr.colorPrimary)
+        val primary = themeColor(androidx.appcompat.R.attr.colorPrimary)
         val unselected = ContextCompat.getColor(this, R.color.colorTextSecondary)
         val navTint = ColorStateList(
             arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf()),
@@ -268,7 +272,7 @@ class MainActivity : AppCompatActivity() {
                 .error(R.drawable.ic_music_note)
                 .listener(
                     onSuccess = { _, result ->
-                        val bmp = (result.drawable as? BitmapDrawable)?.bitmap
+                        val bmp = (result.image as? BitmapImage)?.bitmap
                         if (bmp != null) applyPlayerBarPalette(bmp) else resetPlayerBarBackground()
                     },
                     onError = { _, _ -> resetPlayerBarBackground() }
@@ -415,18 +419,13 @@ class MainActivity : AppCompatActivity() {
     private fun downloadAndInstall(url: String, version: String) {
         // Check that HexaPlayer is allowed to install packages (minSdk=27 >= O so always applies)
         if (!packageManager.canRequestPackageInstalls()) {
-            Snackbar.make(
-                binding.root,
-                getString(R.string.update_install_permission),
-                Snackbar.LENGTH_LONG
-            ).setAction("Settings") {
-                startActivity(
-                    Intent(
-                        Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
-                        Uri.parse("package:$packageName")
-                    )
+            toast(getString(R.string.update_install_permission), long = true)
+            startActivity(
+                Intent(
+                    Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                    Uri.parse("package:$packageName")
                 )
-            }.show()
+            )
             return
         }
 
