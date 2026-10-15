@@ -95,7 +95,10 @@
     <string name="dl_subtitle">Download Spotify playlists, albums and tracks with spotDL running in Termux on your phone</string>
 
     <!-- Setup helper (shown until connected) -->
-    <string name="dl_setup_header">One-time setup</string>
+    <string name="dl_setup_header">Downloader</string>
+    <string name="dl_card_stopped">The downloader is not running. It starts by itself when you download, or start it now.</string>
+    <string name="dl_card_running">The downloader is running. To update or repair it, run the setup command again from the guide.</string>
+    <string name="dl_card_outdated">Your downloader is out of date. Open the setup guide and run the setup command again in Termux.</string>
     <string name="dl_setup_body">Downloads run through the free Termux app, which runs spotDL on your phone. Follow the setup guide once, then HexaPlayer starts it for you.</string>
     <string name="dl_setup_guide">Setup guide</string>
     <string name="dl_start_server">Start downloader</string>
@@ -106,6 +109,8 @@
     <string name="dl_server_url_hint">Server address</string>
     <string name="dl_server_token_hint">Access token (leave empty for Termux)</string>
     <string name="dl_test_connection">Test connection</string>
+    <string name="dl_test_success">Success</string>
+    <string name="dl_test_failure">Failure</string>
 
     <!-- Link + folder -->
     <string name="dl_link_hint">Spotify link (playlist, album or track)</string>
@@ -227,14 +232,14 @@
     <string name="tx_termux_missing">Install Termux first (step 1)</string>
     <string name="tx_step_3">Step 3</string>
     <string name="tx_permission_title">Let HexaPlayer start Termux</string>
-    <string name="tx_permission_body">With this permission, HexaPlayer starts the downloader in the background whenever you open the Download tab. Without it, you have to open Termux and type hexadl yourself each time.</string>
+    <string name="tx_permission_body">With this permission, HexaPlayer starts the downloader in the background when you start a download, and it stops by itself after 10 minutes without downloads. Without it, you have to open Termux and type hexadl yourself each time.</string>
     <string name="tx_permission_button">Allow</string>
     <string name="tx_permission_granted">✓ Permission granted</string>
     <string name="tx_permission_missing">Permission not granted yet</string>
     <string name="tx_permission_denied">Permission denied. You can still type hexadl in Termux.</string>
     <string name="tx_step_4">Step 4</string>
     <string name="tx_start_title">Start the downloader</string>
-    <string name="tx_start_body">Termux then shows a notification while the downloader runs. To stop it, tap Exit in that notification.</string>
+    <string name="tx_start_body">Optional: start it now to check that everything works. Termux shows a notification while it runs; it stops by itself after 10 minutes without downloads.</string>
     <string name="tx_start_button">Start now</string>
     <string name="tx_start_manual">Open Termux and type hexadl, then come back</string>
     <string name="tx_tips_label">Tips</string>

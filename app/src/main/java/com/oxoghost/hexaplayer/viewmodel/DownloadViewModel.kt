@@ -20,6 +20,10 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import org.json.JSONArray
+import org.json.JSONObject
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.coroutines.resume
 
@@ -40,6 +44,14 @@ class DownloadViewModel(application: Application) : AndroidViewModel(application
     private val _connected = MutableLiveData<Boolean>(false)
     val connected: LiveData<Boolean> = _connected
 
+    /** True when the running server is older than this app needs. */
+    private val _serverOutdated = MutableLiveData(false)
+    val serverOutdated: LiveData<Boolean> = _serverOutdated
+
+    /** Result of the last connection check: true, false, or null while checking. */
+    private val _checkResult = MutableLiveData<Boolean?>(null)
+    val checkResult: LiveData<Boolean?> = _checkResult
+
     private val _toastMessage = MutableLiveData<String?>(null)
     val toastMessage: LiveData<String?> = _toastMessage
 
@@ -52,6 +64,12 @@ class DownloadViewModel(application: Application) : AndroidViewModel(application
     private var connectJob: Job? = null
 
     private val stopping = mutableSetOf<Long>()
+
+    private val serverMutex = Mutex()
+
+    init {
+        _syncs.value = loadSyncCache()
+    }
 
     // --- Settings ---------------------------------------------------------- //
 
@@ -75,22 +93,23 @@ class DownloadViewModel(application: Application) : AndroidViewModel(application
 
     // --- Connection -------------------------------------------------------- //
 
-    /** Called when the Download tab becomes visible: connect, and start Termux if allowed. */
+    /** Called when the Download tab becomes visible. Only checks, never starts the server. */
     fun onScreenShown() {
-        if (_connected.value == true || connectJob?.isActive == true) return
-        connect(autoStart = true)
+        if (connectJob?.isActive == true) return
+        connect()
     }
 
-    fun testConnection() = connect(autoStart = false)
+    fun testConnection() = connect()
 
-    private fun connect(autoStart: Boolean) {
+    private fun connect() {
         val server = serverUrl
         if (server.isBlank()) {
             _connectionStatus.value = "Set the server address first"
-            _connected.value = false
+            setConnected(false)
             return
         }
         _connectionStatus.value = "Connecting…"
+        _checkResult.value = null
         connectJob?.cancel()
         connectJob = viewModelScope.launch {
             try {
@@ -98,12 +117,11 @@ class DownloadViewModel(application: Application) : AndroidViewModel(application
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
                 Log.w(TAG, "Health check failed", e)
-                if (autoStart && isLocalServer() && Termux.canStartServer(getApplication())) {
-                    launchServerAndWait()
-                } else {
-                    _connected.value = false
-                    _connectionStatus.value = "Not connected. Is the downloader running in Termux?"
-                }
+                setConnected(false)
+                _connectionStatus.value =
+                    if (isLocalServer() && Termux.canStartServer(getApplication()))
+                        "Not running. It starts by itself when you download."
+                    else "Not connected. Is the downloader running in Termux?"
             }
         }
     }
@@ -114,28 +132,54 @@ class DownloadViewModel(application: Application) : AndroidViewModel(application
         connectJob = viewModelScope.launch { launchServerAndWait() }
     }
 
-    private suspend fun launchServerAndWait() {
+    /** Makes sure the server answers before a job, starting it through Termux if needed. */
+    private suspend fun ensureServer(): Boolean = serverMutex.withLock {
+        try {
+            onConnected(repo.health(serverUrl, serverToken))
+            return true
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+        }
+        if (!isLocalServer() || !Termux.canStartServer(getApplication())) {
+            setConnected(false)
+            _connectionStatus.value = "Not connected. Is the downloader running in Termux?"
+            return false
+        }
+        launchServerAndWait()
+    }
+
+    private suspend fun launchServerAndWait(): Boolean {
         if (!Termux.startServer(getApplication())) {
-            _connected.value = false
+            setConnected(false)
             _connectionStatus.value = "Termux refused to start. Check the setup guide."
-            return
+            return false
         }
         _connectionStatus.value = "Starting the downloader…"
+        _checkResult.value = null
         repeat(20) {
             delay(1500)
             try {
                 onConnected(repo.health(serverUrl, serverToken))
-                return
-            } catch (_: Exception) { }
+                return true
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+            }
         }
-        _connected.value = false
+        setConnected(false)
         _connectionStatus.value = "Downloader did not start. Run the setup command in Termux again."
+        return false
     }
 
     private fun onConnected(health: ServerHealth) {
-        _connected.value = true
+        setConnected(true)
+        _serverOutdated.value = health.serverVersion < MIN_SERVER_VERSION
         _connectionStatus.value = "Connected · spotDL ${health.version}"
         refreshSyncs()
+    }
+
+    private fun setConnected(ok: Boolean) {
+        _connected.value = ok
+        _checkResult.value = ok
     }
 
     private fun isLocalServer(): Boolean {
@@ -148,9 +192,30 @@ class DownloadViewModel(application: Application) : AndroidViewModel(application
         if (server.isBlank()) return
         viewModelScope.launch {
             try {
-                _syncs.value = repo.listSyncs(server, serverToken)
-            } catch (_: Exception) { /* ignore */ }
+                val list = repo.listSyncs(server, serverToken)
+                _syncs.value = list
+                saveSyncCache(list)
+            } catch (_: Exception) { }
         }
+    }
+
+    /** The synced playlists are remembered so they show while the server is stopped. */
+    private fun loadSyncCache(): List<SyncEntry> = try {
+        val arr = JSONArray(prefs.getString("syncs_cache", "[]"))
+        (0 until arr.length()).map { i ->
+            val o = arr.getJSONObject(i)
+            SyncEntry(o.getString("url"), o.optString("folder"), o.optString("root"), o.optString("name"))
+        }
+    } catch (_: Exception) {
+        emptyList()
+    }
+
+    private fun saveSyncCache(list: List<SyncEntry>) {
+        val arr = JSONArray()
+        list.forEach {
+            arr.put(JSONObject().put("url", it.url).put("folder", it.folder).put("root", it.root).put("name", it.name))
+        }
+        prefs.edit().putString("syncs_cache", arr.toString()).apply()
     }
 
     // --- Jobs -------------------------------------------------------------- //
@@ -216,6 +281,11 @@ class DownloadViewModel(application: Application) : AndroidViewModel(application
         val token = serverToken
         viewModelScope.launch {
             try {
+                upsert(job.copy(message = "Starting the downloader…"))
+                if (!ensureServer()) {
+                    upsert(job.copy(phase = JobPhase.ERROR, error = "Downloader not running. See the setup guide."))
+                    return@launch
+                }
                 val serverId = repo.startJob(server, token, job.url, job.kind, job.folder, job.root)
                 var current = job.copy(
                     serverId = serverId,
@@ -299,6 +369,7 @@ class DownloadViewModel(application: Application) : AndroidViewModel(application
 
     companion object {
         private const val TAG = "DownloadViewModel"
+        private const val MIN_SERVER_VERSION = 2
         private const val DEFAULT_URL = "http://127.0.0.1:47823"
         private const val OLD_DEFAULT_URL = "http://127.0.0.1:8000"
     }

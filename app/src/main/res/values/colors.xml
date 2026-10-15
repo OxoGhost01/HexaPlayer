@@ -13,6 +13,8 @@
     <color name="white">#FFFFFFFF</color>
     <color name="black">#FF000000</color>
     <color name="transparent">#00000000</color>
+    <color name="colorSuccess">#FF4CAF50</color>
+    <color name="colorFailure">#FFF44336</color>
 
     <!-- Accent: Purple (default) -->
     <color name="accent_purple_primary">#FFAA00FF</color>

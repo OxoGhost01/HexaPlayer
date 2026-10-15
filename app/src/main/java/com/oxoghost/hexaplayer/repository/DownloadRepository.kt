@@ -24,6 +24,7 @@ data class ServerJob(
 /** Result of `GET /health`. */
 data class ServerHealth(
     val version: String,
+    val serverVersion: Int,
     val root: String
 )
 
@@ -39,6 +40,7 @@ class DownloadRepository {
         val obj = JSONObject(json)
         ServerHealth(
             version = obj.optString("spotdl", "?"),
+            serverVersion = obj.optInt("server", 0),
             root = obj.optString("root", "")
         )
     }

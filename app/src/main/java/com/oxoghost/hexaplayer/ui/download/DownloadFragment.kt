@@ -58,7 +58,35 @@ class DownloadFragment : Fragment() {
 
     override fun onHiddenChanged(hidden: Boolean) {
         super.onHiddenChanged(hidden)
-        if (!hidden) viewModel.onScreenShown()
+        if (!hidden) {
+            updateSetupCard()
+            viewModel.onScreenShown()
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        updateSetupCard()
+    }
+
+    /** The card always gives access to the guide, so the setup command can be re-run to update. */
+    private fun updateSetupCard() {
+        val b = _binding ?: return
+        val connected = viewModel.connected.value == true
+        val outdated = connected && viewModel.serverOutdated.value == true
+        val canStart = Termux.canStartServer(requireContext())
+        b.tvSetupBody.setText(
+            when {
+                outdated -> R.string.dl_card_outdated
+                connected -> R.string.dl_card_running
+                canStart -> R.string.dl_card_stopped
+                else -> R.string.dl_setup_body
+            }
+        )
+        b.tvSetupBody.setTextColor(
+            ContextCompat.getColor(requireContext(), if (outdated) R.color.colorFailure else R.color.colorTextSecondary)
+        )
+        b.btnStartServer.visibility = if (connected) View.GONE else View.VISIBLE
     }
 
     private fun setupRecyclerViews() {
@@ -166,8 +194,17 @@ class DownloadFragment : Fragment() {
             binding.tvConnectionStatus.text = status ?: ""
         }
 
-        viewModel.connected.observe(viewLifecycleOwner) { connected ->
-            binding.sectionSetup.visibility = if (connected) View.GONE else View.VISIBLE
+        viewModel.connected.observe(viewLifecycleOwner) { updateSetupCard() }
+        viewModel.serverOutdated.observe(viewLifecycleOwner) { updateSetupCard() }
+
+        viewModel.checkResult.observe(viewLifecycleOwner) { ok ->
+            binding.tvTestResult.visibility = if (ok == null) View.GONE else View.VISIBLE
+            if (ok != null) {
+                binding.tvTestResult.setText(if (ok) R.string.dl_test_success else R.string.dl_test_failure)
+                binding.tvTestResult.setTextColor(
+                    ContextCompat.getColor(requireContext(), if (ok) R.color.colorSuccess else R.color.colorFailure)
+                )
+            }
         }
 
         viewModel.toastMessage.observe(viewLifecycleOwner) { msg ->
