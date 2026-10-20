@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application>
+        <!-- Debug only: every 2.0 component in both skins and every palette -->
+        <activity
+            android:name=".ui.gallery.DesignGalleryActivity"
+            android:exported="true"
+            android:label="Hexa gallery"
+            android:taskAffinity="com.oxoghost.hexaplayer.gallery">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>
