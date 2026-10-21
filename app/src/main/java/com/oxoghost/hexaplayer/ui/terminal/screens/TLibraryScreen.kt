@@ -25,7 +25,6 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import com.oxoghost.hexaplayer.data.Song
 import com.oxoghost.hexaplayer.ui.common.PixelCover
-import com.oxoghost.hexaplayer.ui.common.SwipeToQueue
 import com.oxoghost.hexaplayer.ui.common.albumKey
 import com.oxoghost.hexaplayer.ui.common.artModel
 import com.oxoghost.hexaplayer.ui.common.durationMs
@@ -53,6 +52,14 @@ fun TLibraryScreen(lib: LibraryState, playback: PlaybackState, actions: HexaActi
     val c = TerminalTheme.colors
     val section = lib.section
     BackHandler(enabled = section == LibrarySection.Folders && lib.canGoUp, onBack = actions::folderUp)
+
+    if (lib.totalSongs == 0 && !lib.loading) {
+        TScreen(
+            header = { THeader("~/lib", action = "[:set]", actionDescription = "Settings", onAction = actions::openSettings) },
+            status = { TStatusLine(TMode.EMPTY, "~/" + lib.folder.trim('/'), position = "0/0") },
+        ) { TEmptyLibrary(lib.folder, actions, Modifier.weight(1f)) }
+        return
+    }
 
     TScreen(
         header = {
@@ -129,11 +136,15 @@ private fun SectionList(lib: LibraryState, playback: PlaybackState, actions: Hex
     LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = androidx.compose.foundation.layout.PaddingValues(top = 4.dp)) {
         when (section) {
             LibrarySection.Songs -> itemsIndexed(lib.songs, key = { _, s -> s.id }) { i, song ->
-                SongRow(song, i == lib.cursor, song.id == playingId, trailing = formatDuration(song.duration), actions,
-                    onClick = {
+                TSongRow(
+                    song, lib.songs, i, actions,
+                    onPlay = {
                         actions.setCursor(section, i)
                         playWithAlbum(song, lib, actions)
-                    })
+                    },
+                    cursor = i == lib.cursor,
+                    playing = song.id == playingId,
+                )
             }
             LibrarySection.Albums -> itemsIndexed(lib.albums, key = { _, a -> a.id }) { i, album ->
                 TListRow(
@@ -142,7 +153,7 @@ private fun SectionList(lib: LibraryState, playback: PlaybackState, actions: Hex
                         actions.setCursor(section, i)
                         actions.openAlbum(album)
                     },
-                    onLongClick = { actions.addToPlaylist(album.songs) },
+                    onLongClick = { actions.addToPlaylist(album.songs, album.title) },
                 )
             }
             LibrarySection.Artists -> itemsIndexed(lib.artists, key = { _, a -> a.name }) { i, artist ->
@@ -166,7 +177,7 @@ private fun SectionList(lib: LibraryState, playback: PlaybackState, actions: Hex
                         actions.setCursor(section, i)
                         actions.openPlaylist(playlist)
                     },
-                    onLongClick = { actions.playlistMenu(playlist) },
+                    onLongClick = { actions.editPlaylist(playlist) },
                 )
             }
             LibrarySection.Folders -> {
@@ -182,37 +193,24 @@ private fun SectionList(lib: LibraryState, playback: PlaybackState, actions: Hex
                 }
                 itemsIndexed(lib.folderSongs, key = { _, s -> s.id }) { i, song ->
                     val index = lib.folders.size + i
-                    SongRow(song, index == lib.cursor, song.id == playingId, trailing = formatSize(song.size, short = true), actions,
-                        title = song.displayName.ifBlank { song.title }, subtitle = null,
-                        onClick = {
+                    TSongRow(
+                        song, lib.folderSongs, i, actions,
+                        onPlay = {
                             actions.setCursor(section, index)
                             actions.play(lib.folderSongs, i, "folder · ${lib.folderCrumbs.last()}")
-                        })
+                        },
+                        title = song.displayName.ifBlank { song.title },
+                        subtitle = null,
+                        trailing = formatSize(song.size, short = true),
+                        cursor = index == lib.cursor,
+                        playing = song.id == playingId,
+                    )
                 }
             }
         }
         if (lib.itemCount == 0 && !lib.loading) {
             item { TText(if (section == LibrarySection.Playlists) "no playlists yet: + new" else "nothing here", Modifier.padding(12.dp), color = c.dim) }
         }
-    }
-}
-
-@Composable
-private fun SongRow(
-    song: Song,
-    cursor: Boolean,
-    playing: Boolean,
-    trailing: String,
-    actions: HexaActions,
-    title: String = song.title,
-    subtitle: String? = song.artist,
-    onClick: () -> Unit,
-) {
-    SwipeToQueue(onSwipe = { actions.addToQueue(song) }, color = TerminalTheme.colors.accent) {
-        TListRow(
-            title = title, subtitle = subtitle, trailing = trailing, cursor = cursor, playing = playing,
-            onClick = onClick, onLongClick = { actions.songMenu(song) },
-        )
     }
 }
 
@@ -268,7 +266,7 @@ private fun statusContext(lib: LibraryState): String = when (lib.section) {
     LibrarySection.Songs -> lib.songs.getOrNull(lib.cursor)?.displayName ?: "${lib.totalSongs} songs"
     LibrarySection.Albums -> "long press: add all to playlist"
     LibrarySection.Artists -> "${lib.artists.size} artists"
-    LibrarySection.Playlists -> "long press: edit or delete"
+    LibrarySection.Playlists -> "long press: edit, cover or delete"
     LibrarySection.Folders -> {
         val size = lib.folderSongs.sumOf { it.size }
         "drwx · ${lib.itemCount} items" + (if (size > 0) " · ${formatSize(size)}" else "")
