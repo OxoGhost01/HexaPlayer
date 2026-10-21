@@ -29,11 +29,15 @@ import com.oxoghost.hexaplayer.repository.CoverRepository
 import com.oxoghost.hexaplayer.repository.LyricsRepository
 import com.oxoghost.hexaplayer.repository.MusicRepository
 import com.oxoghost.hexaplayer.repository.PlaylistRepository
+import com.oxoghost.hexaplayer.repository.CoverChange
+import com.oxoghost.hexaplayer.repository.TagField
+import com.oxoghost.hexaplayer.repository.TagRepository
 import com.oxoghost.hexaplayer.service.MusicService
 import com.google.common.util.concurrent.MoreExecutors
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
 import kotlin.coroutines.resume
 
 class MusicViewModel(application: Application) : AndroidViewModel(application) {
@@ -41,6 +45,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     val musicRepository = MusicRepository(application)
     val playlistRepository = PlaylistRepository(application)
     val coverRepository = CoverRepository(application)
+    val tags = TagRepository(application)
     private val lyricsRepository = LyricsRepository()
 
     private val lyricsCache = mutableMapOf<Long, LyricsState>()
@@ -121,6 +126,10 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
 
     private val sleepTimerHandler = Handler(Looper.getMainLooper())
     private var sleepTimerRunnable: Runnable? = null
+
+    /** Length of the running sleep timer, for its progress ring. */
+    var sleepTimerTotalMs = 0L
+        private set
 
     var musicFolder: String
         get() = prefs.getString("music_folder", "") ?: ""
@@ -228,6 +237,26 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     fun clearCustomCover(songId: Long) {
         coverRepository.clearOverride(songId)
         loadLibrary()
+    }
+
+    /**
+     * Writes tags into the files (write access must already be granted), rescans them and reloads
+     * the library. [onDone] gets the number of files written.
+     */
+    fun saveTags(songs: List<Song>, changes: Map<TagField, String>, cover: CoverChange, onDone: (Int) -> Unit) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val written = songs.count { tags.write(it, changes, cover) }
+            when (cover) {
+                is CoverChange.Set -> songs.forEach { coverRepository.setOverride(it.id, cover.uri.toString()) }
+                CoverChange.Remove -> songs.forEach { coverRepository.clearOverride(it.id) }
+                CoverChange.Keep -> {}
+            }
+            tags.rescan(songs)
+            withContext(Dispatchers.Main) {
+                loadLibrary()
+                onDone(written)
+            }
+        }
     }
 
     fun loadLibrary() {
@@ -509,6 +538,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         sleepTimerRunnable = null
         if (seconds <= 0) { _sleepTimerActive.value = false; _sleepTimerEndsAt.value = null; return }
         _sleepTimerActive.value = true
+        sleepTimerTotalMs = seconds * 1_000L
         _sleepTimerEndsAt.value = System.currentTimeMillis() + seconds * 1_000L
         val runnable = Runnable {
             controller?.pause()
@@ -610,14 +640,14 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         refreshPlaylists()
     }
 
-    fun editPlaylist(playlistId: String, newName: String? = null, newCoverUri: String? = null) {
+    fun editPlaylist(playlistId: String, newName: String? = null, newCoverUri: String? = null, clearCover: Boolean = false) {
         val list = playlistRepository.getAll().toMutableList()
         val idx = list.indexOfFirst { it.id == playlistId }
         if (idx < 0) return
         val current = list[idx]
         list[idx] = current.copy(
             name = newName ?: current.name,
-            coverUri = if (newCoverUri != null) newCoverUri else current.coverUri
+            coverUri = if (clearCover) null else newCoverUri ?: current.coverUri
         )
         playlistRepository.save(list[idx])
         refreshPlaylists()
@@ -630,6 +660,18 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
 
     fun addSongsToPlaylist(playlistId: String, songIds: List<Long>) {
         playlistRepository.addSongs(playlistId, songIds)
+        refreshPlaylists()
+    }
+
+    fun removeFromPlaylist(playlistId: String, songId: Long) {
+        playlistRepository.removeSong(playlistId, songId)
+        refreshPlaylists()
+    }
+
+    /** Moves by song id, since the playlist can hold ids that are no longer in the library. */
+    fun movePlaylistSong(playlistId: String, fromSongId: Long, toSongId: Long) {
+        val ids = _playlists.value?.firstOrNull { it.id == playlistId }?.songIds ?: return
+        playlistRepository.moveSong(playlistId, ids.indexOf(fromSongId), ids.indexOf(toSongId))
         refreshPlaylists()
     }
 
