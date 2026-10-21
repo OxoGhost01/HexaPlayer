@@ -74,6 +74,10 @@ fun MLibraryScreen(lib: LibraryState, playback: PlaybackState, actions: HexaActi
     BackHandler(enabled = lib.section == LibrarySection.Folders && lib.canGoUp, onBack = actions::folderUp)
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
         MTopRow(onSearch = actions::openSearch, onIdentify = null, onSettings = actions::openSettings)
+        if (lib.totalSongs == 0 && !lib.loading) {
+            MEmptyLibrary(lib.folder, actions, Modifier.weight(1f).fillMaxWidth())
+            return@Column
+        }
         MTabChips(tabs, lib.section.ordinal, { actions.selectSection(LibrarySection.entries[it]) }, modifier = Modifier.padding(vertical = 8.dp))
         LazyVerticalGrid(
             columns = GridCells.Fixed(COLS),
@@ -163,21 +167,7 @@ private fun Breadcrumbs(lib: LibraryState, actions: HexaActions) {
 
 private fun LazyGridScope.songs(songs: List<Song>, playback: PlaybackState, actions: HexaActions, onPlay: (Song, Int) -> Unit) {
     itemsIndexed(songs, key = { _, s -> "s${s.id}" }, span = { _, _ -> GridItemSpan(COLS) }) { i, song ->
-        SongRow(song, playback, actions) { onPlay(song, i) }
-    }
-}
-
-@Composable
-private fun SongRow(song: Song, playback: PlaybackState, actions: HexaActions, subtitle: String? = null, onClick: () -> Unit) {
-    SwipeToQueue(onSwipe = { actions.addToQueue(song) }, color = MaterialTheme.colorScheme.primary) {
-        MListRow(
-            title = song.title,
-            subtitle = subtitle ?: "${song.artist} · ${formatDuration(song.duration)}",
-            playing = playback.song?.id == song.id,
-            onClick = onClick,
-            onLongClick = { actions.songMenu(song) },
-            onMore = { actions.songMenu(song) },
-        ) { CoverImage(song.artModel, song.albumKey, Modifier.fillMaxSize(), HexaShapes.coverRow) }
+        MSongRow(song, songs, i, playback, actions, onPlay = { onPlay(song, i) })
     }
 }
 
@@ -195,14 +185,14 @@ private fun LazyGridScope.albums(lib: LibraryState, actions: HexaActions, asList
                 title = album.title,
                 subtitle = "${album.artist} · ${album.songs.size} songs",
                 onClick = { actions.openAlbum(album) },
-                onLongClick = { actions.addToPlaylist(album.songs) },
+                onLongClick = { actions.addToPlaylist(album.songs, album.title) },
             ) { CoverImage(album.artModel, album.albumKey, Modifier.fillMaxSize(), HexaShapes.coverRow) }
         } else {
             GridTile(
                 title = album.title,
                 subtitle = album.artist,
                 onClick = { actions.openAlbum(album) },
-                onLongClick = { actions.addToPlaylist(album.songs) },
+                onLongClick = { actions.addToPlaylist(album.songs, album.title) },
             ) { CoverImage(album.artModel, album.albumKey, Modifier.fillMaxSize(), HexaShapes.coverGrid) }
         }
     }
@@ -222,7 +212,7 @@ private fun LazyGridScope.playlists(lib: LibraryState, actions: HexaActions) {
     itemsIndexed(lib.playlists, key = { _, p -> "p${p.id}" }, span = { _, _ -> GridItemSpan(3) }) { _, playlist ->
         val songs = lib.playlistSongs[playlist.id].orEmpty()
         val first = songs.firstOrNull()
-        GridTile(playlist.name, "${songs.size} songs", { actions.openPlaylist(playlist) }, { actions.playlistMenu(playlist) }) {
+        GridTile(playlist.name, "${songs.size} songs", { actions.openPlaylist(playlist) }, { actions.editPlaylist(playlist) }) {
             CoverImage(playlist.coverUri ?: first?.artModel, playlist.coverUri ?: first?.albumKey, Modifier.fillMaxSize(), HexaShapes.coverGrid)
         }
     }
