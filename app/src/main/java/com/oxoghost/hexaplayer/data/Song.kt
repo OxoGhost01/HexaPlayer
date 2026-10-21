@@ -15,5 +15,7 @@ data class Song(
     val duration: Long,       // milliseconds
     val relativePath: String, // e.g. "Music/Artist/Album/"
     val displayName: String,
-    val customCoverUri: String? = null // app-local cover override
+    val customCoverUri: String? = null, // app-local cover override
+    val dateAdded: Long = 0L,           // seconds since epoch (MediaStore DATE_ADDED)
+    val size: Long = 0L,                // bytes
 ) : Parcelable

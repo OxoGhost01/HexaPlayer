@@ -28,6 +28,8 @@ class MusicRepository(private val context: Context) {
             add(MediaStore.Audio.Media.ALBUM_ID)
             add(MediaStore.Audio.Media.DURATION)
             add(MediaStore.Audio.Media.DISPLAY_NAME)
+            add(MediaStore.Audio.Media.DATE_ADDED)
+            add(MediaStore.Audio.Media.SIZE)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 add(MediaStore.Audio.Media.RELATIVE_PATH)
             } else {
@@ -69,6 +71,8 @@ class MusicRepository(private val context: Context) {
             val albumIdCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ID)
             val durationCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
             val displayNameCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DISPLAY_NAME)
+            val dateAddedCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_ADDED)
+            val sizeCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.SIZE)
             val pathColName = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 MediaStore.Audio.Media.RELATIVE_PATH
             } else {
@@ -98,7 +102,9 @@ class MusicRepository(private val context: Context) {
                         albumId = cursor.getLong(albumIdCol),
                         duration = cursor.getLong(durationCol),
                         relativePath = relativePath,
-                        displayName = cursor.getString(displayNameCol) ?: ""
+                        displayName = cursor.getString(displayNameCol) ?: "",
+                        dateAdded = cursor.getLong(dateAddedCol),
+                        size = cursor.getLong(sizeCol)
                     )
                 )
             }
