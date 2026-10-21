@@ -107,6 +107,18 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     private val _sleepTimerActive = MutableLiveData(false)
     val sleepTimerActive: LiveData<Boolean> = _sleepTimerActive
 
+    /** Wall clock time (ms) when the sleep timer stops playback, null when off. */
+    private val _sleepTimerEndsAt = MutableLiveData<Long?>(null)
+    val sleepTimerEndsAt: LiveData<Long?> = _sleepTimerEndsAt
+
+    /** Label of what the context queue was started from ("album · Showbiz"), null if unknown. */
+    private val _queueSource = MutableLiveData<String?>(null)
+    val queueSource: LiveData<String?> = _queueSource
+
+    /** Lyrics offset of the current song in ms (positive = lyrics later). */
+    private val _lyricsOffsetMs = MutableLiveData(0L)
+    val lyricsOffsetMs: LiveData<Long> = _lyricsOffsetMs
+
     private val sleepTimerHandler = Handler(Looper.getMainLooper())
     private var sleepTimerRunnable: Runnable? = null
 
@@ -261,8 +273,9 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         _playlists.value = playlistRepository.getAll()
     }
 
-    fun playQueue(songs: List<Song>, startIndex: Int = 0) {
+    fun playQueue(songs: List<Song>, startIndex: Int = 0, source: String? = null) {
         val ctrl = controller ?: return
+        _queueSource.value = source
         contextQueue = songs
         contextCurrentIndex = startIndex
         uqEntries.clear()
@@ -282,11 +295,11 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         if (startIndex < songs.size) _currentSong.value = songs[startIndex]
     }
 
-    fun playQueueShuffled(songs: List<Song>) {
+    fun playQueueShuffled(songs: List<Song>, source: String? = null) {
         if (songs.isEmpty()) return
         // Order is randomized here; we then tell the service shuffle is ON (force flag,
         // no extra reorder) so the icon state stays consistent across phone app and AA.
-        playQueue(songs.shuffled(), 0)
+        playQueue(songs.shuffled(), 0, source)
         controller?.sendCustomCommand(
             SessionCommand(MusicService.CMD_SHUFFLE, Bundle.EMPTY),
             Bundle().apply { putBoolean(MusicService.EXTRA_FORCE_ON, true) }
@@ -335,6 +348,19 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                 _contextQueueLive.postValue(contextQueue)
             }
         }
+    }
+
+    /** Removes everything queued after the current song (user queue and context). */
+    fun clearUpcoming() {
+        val ctrl = controller ?: return
+        val cur = ctrl.currentMediaItemIndex
+        if (cur < 0 || cur >= ctrl.mediaItemCount - 1) return
+        val currentId = ctrl.currentMediaItem?.mediaId
+        ctrl.removeMediaItems(cur + 1, ctrl.mediaItemCount)
+        uqEntries.removeAll { it.mediaId != currentId }
+        _userQueueLive.postValue(uqEntries.map { it.song })
+        contextQueue = contextQueue.take(contextCurrentIndex + 1)
+        _contextQueueLive.postValue(contextQueue)
     }
 
     fun playQueueItemAt(exoIndex: Int) {
@@ -481,11 +507,13 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     fun setSleepTimer(seconds: Long) {
         sleepTimerRunnable?.let { sleepTimerHandler.removeCallbacks(it) }
         sleepTimerRunnable = null
-        if (seconds <= 0) { _sleepTimerActive.value = false; return }
+        if (seconds <= 0) { _sleepTimerActive.value = false; _sleepTimerEndsAt.value = null; return }
         _sleepTimerActive.value = true
+        _sleepTimerEndsAt.value = System.currentTimeMillis() + seconds * 1_000L
         val runnable = Runnable {
             controller?.pause()
             _sleepTimerActive.postValue(false)
+            _sleepTimerEndsAt.postValue(null)
             sleepTimerRunnable = null
         }
         sleepTimerRunnable = runnable
@@ -496,6 +524,12 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         sleepTimerRunnable?.let { sleepTimerHandler.removeCallbacks(it) }
         sleepTimerRunnable = null
         _sleepTimerActive.value = false
+        _sleepTimerEndsAt.value = null
+    }
+
+    fun setLyricsOffset(songId: Long, offsetMs: Long) {
+        prefs.edit().putLong("lyrics_offset_$songId", offsetMs).apply()
+        if (_currentSong.value?.id == songId) _lyricsOffsetMs.value = offsetMs
     }
 
     private fun syncCurrentSong() {
@@ -522,6 +556,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         if (song != null) {
+            _lyricsOffsetMs.postValue(prefs.getLong("lyrics_offset_${song.id}", 0L))
             _currentSong.postValue(song)
             _duration.postValue(ctrl.duration.coerceAtLeast(0L))
             fetchLyricsForSong(song)
