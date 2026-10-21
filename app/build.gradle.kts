@@ -61,6 +61,7 @@ dependencies {
     implementation(libs.gson)
     implementation(libs.coil)
     implementation(libs.androidx.palette)
+    implementation(libs.taglib)
 
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)
