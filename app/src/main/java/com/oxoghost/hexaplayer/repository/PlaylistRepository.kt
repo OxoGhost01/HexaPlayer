@@ -19,7 +19,8 @@ class PlaylistRepository(context: Context) {
     fun save(playlist: Playlist) {
         val list = getAll().toMutableList()
         val idx = list.indexOfFirst { it.id == playlist.id }
-        if (idx >= 0) list[idx] = playlist else list.add(playlist)
+        val edited = playlist.copy(editedAt = System.currentTimeMillis())
+        if (idx >= 0) list[idx] = edited else list.add(edited)
         persist(list)
     }
 
@@ -36,7 +37,7 @@ class PlaylistRepository(context: Context) {
         val pl = list[idx]
         val new = songIds.distinct().filter { it !in pl.songIds }
         if (new.isEmpty()) return
-        list[idx] = pl.copy(songIds = pl.songIds + new)
+        list[idx] = pl.copy(songIds = pl.songIds + new, editedAt = System.currentTimeMillis())
         persist(list)
     }
 
@@ -44,7 +45,18 @@ class PlaylistRepository(context: Context) {
         val list = getAll().toMutableList()
         val idx = list.indexOfFirst { it.id == playlistId }
         if (idx < 0) return
-        list[idx] = list[idx].copy(songIds = list[idx].songIds - songId)
+        list[idx] = list[idx].copy(songIds = list[idx].songIds - songId, editedAt = System.currentTimeMillis())
+        persist(list)
+    }
+
+    fun moveSong(playlistId: String, from: Int, to: Int) {
+        val list = getAll().toMutableList()
+        val idx = list.indexOfFirst { it.id == playlistId }
+        if (idx < 0) return
+        val ids = list[idx].songIds.toMutableList()
+        if (from !in ids.indices || to !in ids.indices) return
+        ids.add(to, ids.removeAt(from))
+        list[idx] = list[idx].copy(songIds = ids, editedAt = System.currentTimeMillis())
         persist(list)
     }
 

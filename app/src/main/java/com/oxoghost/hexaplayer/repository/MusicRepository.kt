@@ -30,6 +30,12 @@ class MusicRepository(private val context: Context) {
             add(MediaStore.Audio.Media.DISPLAY_NAME)
             add(MediaStore.Audio.Media.DATE_ADDED)
             add(MediaStore.Audio.Media.SIZE)
+            add(MediaStore.Audio.Media.YEAR)
+            add(MediaStore.Audio.Media.TRACK)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                add(MediaStore.Audio.Media.ALBUM_ARTIST)
+                add(MediaStore.Audio.Media.GENRE)
+            }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 add(MediaStore.Audio.Media.RELATIVE_PATH)
             } else {
@@ -73,6 +79,10 @@ class MusicRepository(private val context: Context) {
             val displayNameCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DISPLAY_NAME)
             val dateAddedCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_ADDED)
             val sizeCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.SIZE)
+            val yearCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.YEAR)
+            val trackCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TRACK)
+            val albumArtistCol = cursor.getColumnIndex("album_artist")
+            val genreCol = cursor.getColumnIndex("genre")
             val pathColName = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 MediaStore.Audio.Media.RELATIVE_PATH
             } else {
@@ -91,6 +101,8 @@ class MusicRepository(private val context: Context) {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) raw
                     else extractRelativePath(raw)
                 } else ""
+                // MediaStore stores the disc in the thousands: 2003 is disc 2, track 3.
+                val track = cursor.getInt(trackCol)
 
                 songs.add(
                     Song(
@@ -104,7 +116,12 @@ class MusicRepository(private val context: Context) {
                         relativePath = relativePath,
                         displayName = cursor.getString(displayNameCol) ?: "",
                         dateAdded = cursor.getLong(dateAddedCol),
-                        size = cursor.getLong(sizeCol)
+                        size = cursor.getLong(sizeCol),
+                        year = cursor.getInt(yearCol),
+                        track = track % 1000,
+                        disc = track / 1000,
+                        albumArtist = if (albumArtistCol >= 0) cursor.getString(albumArtistCol).orEmpty() else "",
+                        genre = if (genreCol >= 0) cursor.getString(genreCol).orEmpty() else "",
                     )
                 )
             }
@@ -124,7 +141,7 @@ class MusicRepository(private val context: Context) {
                     id = key.first,
                     title = key.second,
                     artist = albumSongs.first().artist,
-                    songs = albumSongs.sortedBy { it.title }
+                    songs = albumSongs.sortedWith(compareBy({ it.disc }, { it.track }, { it.title })),
                 )
             }
             .sortedBy { it.title }
