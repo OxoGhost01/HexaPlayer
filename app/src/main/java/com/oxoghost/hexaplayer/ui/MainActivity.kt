@@ -1,12 +1,10 @@
 package com.oxoghost.hexaplayer.ui
 
-import android.Manifest
 import android.app.DownloadManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.content.pm.PackageManager
 import android.graphics.Color
 import android.net.Uri
 import android.os.Build
@@ -15,12 +13,9 @@ import android.provider.Settings
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import com.oxoghost.hexaplayer.BuildConfig
@@ -28,7 +23,7 @@ import com.oxoghost.hexaplayer.R
 import com.oxoghost.hexaplayer.repository.UpdateInfo
 import com.oxoghost.hexaplayer.repository.UpdateRepository
 import com.oxoghost.hexaplayer.ui.app.HexaApp
-import com.oxoghost.hexaplayer.ui.legacy.LegacyDialogs
+import com.oxoghost.hexaplayer.ui.app.SystemAccess
 import com.oxoghost.hexaplayer.ui.settings.UiSettingsRepository
 import com.oxoghost.hexaplayer.ui.state.UiModel
 import com.oxoghost.hexaplayer.ui.update.UpdateFragment
@@ -42,9 +37,7 @@ class MainActivity : AppCompatActivity() {
 
     private val viewModel: MusicViewModel by viewModels()
     private val uiModel: UiModel by viewModels()
-    private lateinit var dialogs: LegacyDialogs
-
-    private val hasPermission = mutableStateOf(false)
+    private lateinit var system: SystemAccess
 
     // ── Update / download state ───────────────────────────────────────────────
     private var pendingUpdateInfo: UpdateInfo? = null
@@ -60,16 +53,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private val permissionLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions()
-    ) { grants ->
-        if (grants.values.any { it }) onPermissionGranted()
-    }
-
-    private val notifPermissionLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { /* notification is optional */ }
-
     override fun onCreate(savedInstanceState: Bundle?) {
         applyAccentTheme()
         enableEdgeToEdge(
@@ -77,15 +60,14 @@ class MainActivity : AppCompatActivity() {
             navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
         )
         super.onCreate(savedInstanceState)
-        dialogs = LegacyDialogs(this, viewModel)
+        system = SystemAccess(this) { viewModel.loadLibrary() }
+        // Users coming from 1.x already went through setup.
+        if (system.hasAudio && !uiModel.onboarded) uiModel.finishOnboarding()
 
         val settingsRepo = UiSettingsRepository(this)
         setContent {
             val settings by settingsRepo.settings.collectAsStateWithLifecycle(null)
-            val granted by hasPermission
-            settings?.let {
-                HexaApp(it, viewModel, uiModel, dialogs, granted, ::requestAudioPermission)
-            }
+            settings?.let { HexaApp(it, viewModel, uiModel, system) }
         }
 
         // RECEIVER_EXPORTED is required: DownloadManager is a system process and its broadcast
@@ -99,14 +81,18 @@ class MainActivity : AppCompatActivity() {
         }
 
         viewModel.connectToService()
-        if (hasAudioPermission()) onPermissionGranted()
+        if (system.hasAudio) viewModel.loadLibrary()
         checkForUpdatesInBackground()
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-        ) {
-            notifPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-        }
+        // First launch asks for notifications on the onboarding screen instead.
+        if (uiModel.onboarded && !system.hasNotifications) system.requestNotifications()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        val had = system.hasAudio
+        system.refresh()
+        if (!had && system.hasAudio) viewModel.loadLibrary()
     }
 
     override fun onDestroy() {
@@ -126,23 +112,6 @@ class MainActivity : AppCompatActivity() {
             else -> R.style.Theme_HexaPlayer
         }
         setTheme(themeRes)
-    }
-
-    // ── Permissions ───────────────────────────────────────────────────────────
-    private fun audioPermission() =
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) Manifest.permission.READ_MEDIA_AUDIO
-        else Manifest.permission.READ_EXTERNAL_STORAGE
-
-    private fun hasAudioPermission(): Boolean =
-        ContextCompat.checkSelfPermission(this, audioPermission()) == PackageManager.PERMISSION_GRANTED
-
-    private fun requestAudioPermission() {
-        permissionLauncher.launch(arrayOf(audioPermission()))
-    }
-
-    private fun onPermissionGranted() {
-        hasPermission.value = true
-        viewModel.loadLibrary()
     }
 
     // ── Update screen ─────────────────────────────────────────────────────────

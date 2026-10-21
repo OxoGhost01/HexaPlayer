@@ -16,10 +16,12 @@ object Routes {
     const val ALBUM = "album/{id}"
     const val ARTIST = "artist/{name}"
     const val PLAYLIST = "playlist/{id}"
+    const val EDIT = "edit/{ids}"
 
     fun album(id: Long) = "album/$id"
     fun artist(name: String) = "artist/${Uri.encode(name)}"
     fun playlist(id: String) = "playlist/${Uri.encode(id)}"
+    fun edit(ids: List<Long>) = "edit/${ids.joinToString(",")}"
 
     fun of(tab: Tab) = when (tab) {
         Tab.Home -> HOME

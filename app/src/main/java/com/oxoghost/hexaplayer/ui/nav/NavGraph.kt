@@ -5,6 +5,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.fragment.compose.AndroidFragment
 import androidx.navigation.NavHostController
@@ -16,6 +17,7 @@ import com.oxoghost.hexaplayer.ui.common.rememberAlbumSeed
 import com.oxoghost.hexaplayer.ui.download.DownloadFragment
 import com.oxoghost.hexaplayer.ui.equalizer.EqualizerFragment
 import com.oxoghost.hexaplayer.ui.material.screens.MDetailScreen
+import com.oxoghost.hexaplayer.ui.material.screens.MEditScreen
 import com.oxoghost.hexaplayer.ui.material.screens.MHomeScreen
 import com.oxoghost.hexaplayer.ui.material.screens.MHostedScreen
 import com.oxoghost.hexaplayer.ui.material.screens.MLibraryScreen
@@ -35,7 +37,9 @@ import com.oxoghost.hexaplayer.ui.state.PlaybackState
 import com.oxoghost.hexaplayer.ui.state.SortKey
 import com.oxoghost.hexaplayer.ui.state.Tab
 import com.oxoghost.hexaplayer.ui.state.UiModel
+import com.oxoghost.hexaplayer.ui.state.rememberAudioInfo
 import com.oxoghost.hexaplayer.ui.state.rememberDetailState
+import com.oxoghost.hexaplayer.ui.state.rememberEditState
 import com.oxoghost.hexaplayer.ui.state.rememberHomeState
 import com.oxoghost.hexaplayer.ui.state.rememberLibraryState
 import com.oxoghost.hexaplayer.ui.state.rememberLyricsState
@@ -43,6 +47,7 @@ import com.oxoghost.hexaplayer.ui.state.rememberQueueState
 import com.oxoghost.hexaplayer.ui.state.rememberSearchState
 import com.oxoghost.hexaplayer.ui.terminal.components.TMode
 import com.oxoghost.hexaplayer.ui.terminal.screens.TDetailScreen
+import com.oxoghost.hexaplayer.ui.terminal.screens.TEditScreen
 import com.oxoghost.hexaplayer.ui.terminal.screens.THomeScreen
 import com.oxoghost.hexaplayer.ui.terminal.screens.THostedScreen
 import com.oxoghost.hexaplayer.ui.terminal.screens.TLibraryScreen
@@ -154,6 +159,15 @@ fun HexaNavHost(
         composable(Routes.PLAYLIST, listOf(navArgument("id") { type = NavType.StringType })) { entry ->
             Detail(DetailKey.PlaylistKey(entry.arguments?.getString("id").orEmpty()), terminal, settings, vm, actions, listPlayback)
         }
+        composable(Routes.EDIT, listOf(navArgument("ids") { type = NavType.StringType })) { entry ->
+            val ids = remember(entry) { entry.arguments?.getString("ids").orEmpty().split(',').mapNotNull { it.toLongOrNull() } }
+            val edit = rememberEditState(vm, ids)
+            if (terminal) {
+                TEditScreen(edit, rememberAudioInfo(vm, edit?.songs?.singleOrNull()), settings.pixelCovers, actions)
+            } else {
+                MEditScreen(edit, actions)
+            }
+        }
     }
 }
 
@@ -167,6 +181,6 @@ private fun Detail(
     playback: PlaybackState,
 ) {
     val detail = rememberDetailState(vm, key)
-    if (terminal) TDetailScreen(detail, playback, actions, settings.pixelCovers)
+    if (terminal) TDetailScreen(detail, playback, actions, settings.pixelCovers, rememberAudioInfo(vm, detail?.album?.let { detail.songs.firstOrNull() }))
     else MDetailScreen(detail, playback, actions)
 }
