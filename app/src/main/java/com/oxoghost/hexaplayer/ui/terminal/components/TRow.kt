@@ -117,6 +117,7 @@ fun TPreviewPane(
     lines: List<AnnotatedString>,
     onOpen: () -> Unit,
     modifier: Modifier = Modifier,
+    title: String? = null,
     cover: @Composable () -> Unit,
     extra: (@Composable ColumnScope.() -> Unit)? = null,
 ) {
@@ -126,6 +127,9 @@ fun TPreviewPane(
         Row(Modifier.padding(12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Box(Modifier.size(96.dp)) { cover() }
             Column(Modifier.weight(1f)) {
+                if (title != null) {
+                    TText(title, style = TerminalTheme.type.body.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold))
+                }
                 lines.forEach { TText(it, style = TerminalTheme.type.small, color = c.dim) }
                 extra?.invoke(this)
                 Box(
