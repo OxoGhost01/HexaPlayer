@@ -26,7 +26,7 @@ import com.oxoghost.hexaplayer.ui.tokens.DesignTokens.Material.Metrics
 @Composable
 fun MTopRow(
     onSearch: () -> Unit,
-    onIdentify: () -> Unit,
+    onIdentify: (() -> Unit)?,
     onSettings: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -50,7 +50,9 @@ fun MTopRow(
             Symbol(Symbols.Search, null, tint = s.onSurfaceVariant)
             Text("Search your library", color = s.onSurfaceVariant, style = MaterialTheme.typography.bodyLarge, maxLines = 1)
         }
-        MCircleButton(Symbols.GraphicEq, "Identify a song", onIdentify, container = s.primaryContainer, content = s.onPrimaryContainer)
+        if (onIdentify != null) {
+            MCircleButton(Symbols.GraphicEq, "Identify a song", onIdentify, container = s.primaryContainer, content = s.onPrimaryContainer)
+        }
         MCircleButton(Symbols.Settings, "Settings", onSettings, container = s.tertiaryContainer, content = s.onTertiaryContainer, filled = true)
     }
 }
