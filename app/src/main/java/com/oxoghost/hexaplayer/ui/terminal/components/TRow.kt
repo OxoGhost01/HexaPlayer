@@ -30,7 +30,7 @@ import com.oxoghost.hexaplayer.ui.tokens.DesignTokens.Terminal.Metrics
 /**
  * List row. [cursor] inverts it in accent; [playing] adds `▶︎` and colors the title;
  * [selected] non-null shows the VIS markers `[+]` / `[ ]`; [directory] draws the title as a
- * directory (`accent2`, trailing `/`).
+ * directory (`accent2`, trailing `/`). [gestures] replaces the default tap and long press.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -45,6 +45,7 @@ fun TListRow(
     directory: Boolean = false,
     onClick: () -> Unit = {},
     onLongClick: (() -> Unit)? = null,
+    gestures: Modifier? = null,
 ) {
     val c = TerminalTheme.colors
     val onCursor = c.background
@@ -60,7 +61,7 @@ fun TListRow(
             .fillMaxWidth()
             .height(if (subtitle != null) Metrics.listRow2Line.dp else Metrics.listRow1Line.dp)
             .background(if (cursor) c.accent else if (selected == true) c.selection else c.background)
-            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
+            .then(gestures ?: Modifier.combinedClickable(onClick = onClick, onLongClick = onLongClick))
             .padding(horizontal = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),

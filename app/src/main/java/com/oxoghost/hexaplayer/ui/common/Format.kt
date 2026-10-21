@@ -26,3 +26,25 @@ fun rememberCountdown(endsAt: Long?): Long? {
     }
     return left
 }
+
+/** Terminal length: 34:12 under an hour, 1h52 above. */
+fun formatLengthShort(ms: Long): String {
+    val minutes = ms / 60_000
+    return if (minutes >= 60) "%dh%02d".format(minutes / 60, minutes % 60) else formatDuration(ms)
+}
+
+/** Material length: 34 min, 1 h 31 min. */
+fun formatLengthLong(ms: Long): String {
+    val minutes = (ms + 30_000) / 60_000
+    return if (minutes >= 60) "${minutes / 60} h ${minutes % 60} min" else "$minutes min"
+}
+
+/** 12 Oct (lower case for the terminal skin). */
+fun formatDay(epochMs: Long, lower: Boolean = false): String {
+    val text = java.text.SimpleDateFormat("d MMM", java.util.Locale.ENGLISH).format(java.util.Date(epochMs)).trimEnd('.')
+    return if (lower) text.lowercase(java.util.Locale.ROOT) else text
+}
+
+/** 00:12, the wall-clock time [epochMs] falls on. */
+fun formatClock(epochMs: Long): String =
+    java.text.SimpleDateFormat("HH:mm", java.util.Locale.ROOT).format(java.util.Date(epochMs))

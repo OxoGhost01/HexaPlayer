@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -39,6 +40,8 @@ fun MListRow(
     onClick: () -> Unit = {},
     onLongClick: (() -> Unit)? = null,
     onMore: (() -> Unit)? = null,
+    selected: Boolean? = null,
+    gestures: Modifier? = null,
     leading: @Composable () -> Unit,
 ) {
     val s = MaterialTheme.colorScheme
@@ -47,13 +50,22 @@ fun MListRow(
             .fillMaxWidth()
             .height(Metrics.listRow.dp)
             .clip(RoundedCornerShape(20.dp))
-            .background(if (playing) s.surfaceContainer else Color.Transparent)
-            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
-            .padding(start = 8.dp, end = 0.dp),
+            .background(
+                when {
+                    selected == true -> s.secondaryContainer
+                    playing -> s.surfaceContainer
+                    else -> Color.Transparent
+                }
+            )
+            .then(gestures ?: Modifier.combinedClickable(onClick = onClick, onLongClick = onLongClick))
+            .padding(start = 8.dp, end = if (selected != null) 12.dp else 0.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Box(Modifier.size(48.dp)) { leading() }
+        Box(Modifier.size(48.dp)) {
+            leading()
+            if (selected == true) MCheckBadge(Modifier.align(Alignment.BottomEnd).offset(4.dp, 4.dp))
+        }
         Column(Modifier.weight(1f)) {
             Text(
                 title,
@@ -70,7 +82,11 @@ fun MListRow(
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        if (playing) Symbol(Symbols.GraphicEq, "Playing", tint = s.primary)
-        if (onMore != null) MIconButton(Symbols.MoreVert, "More actions for $title", onMore)
+        if (selected != null) {
+            MSelectionCircle(selected, null)
+        } else {
+            if (playing) Symbol(Symbols.GraphicEq, "Playing", tint = s.primary)
+            if (onMore != null) MIconButton(Symbols.MoreVert, "More actions for $title", onMore)
+        }
     }
 }

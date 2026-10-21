@@ -21,9 +21,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -60,7 +60,7 @@ fun MPillButton(
             .background(bg)
             .then(if (style == MButtonStyle.Outlined) Modifier.border(1.dp, s.outline, CircleShape) else Modifier)
             .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
-            .alpha(if (enabled) 1f else 0.38f)
+            .graphicsLayer { alpha = if (enabled) 1f else 0.38f }
             .padding(horizontal = if (style == MButtonStyle.Text) 16.dp else 24.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),

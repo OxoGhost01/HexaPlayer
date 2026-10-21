@@ -18,6 +18,7 @@ val Song.albumKey: String get() = customCoverUri ?: albumId.toString()
 val Album.artModel: Any get() = albumArtUri(id)
 val Album.albumKey: String get() = id.toString()
 val Album.durationMs: Long get() = songs.sumOf { it.duration }
+val Album.year: Int get() = songs.maxOfOrNull { it.year } ?: 0
 
 /** File extension in lower case (flac, opus, mp3), or "" when unknown. */
 val Song.format: String get() = displayName.substringAfterLast('.', "").lowercase(Locale.ROOT)

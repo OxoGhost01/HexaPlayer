@@ -48,6 +48,7 @@ fun MSegment(
     container: Color = MaterialTheme.colorScheme.surfaceContainer,
     onClick: (() -> Unit)? = null,
     minHeight: Int = Metrics.listRow.dp.value.toInt(),
+    gestures: Modifier? = null,
     content: @Composable RowScope.() -> Unit,
 ) {
     Row(
@@ -56,7 +57,7 @@ fun MSegment(
             .heightIn(min = minHeight.dp)
             .clip(segmentShape(index, count))
             .background(container)
-            .then(if (onClick != null) Modifier.clickable(role = Role.Button, onClick = onClick) else Modifier)
+            .then(gestures ?: if (onClick != null) Modifier.clickable(role = Role.Button, onClick = onClick) else Modifier)
             .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(16.dp),
