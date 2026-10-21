@@ -28,6 +28,7 @@ data class LibraryState(
     val cursor: Int,
     val loading: Boolean,
     val totalSongs: Int,
+    val folder: String,
 ) {
     val canGoUp: Boolean get() = folderCrumbs.size > 1
     val itemCount: Int
@@ -76,7 +77,7 @@ fun rememberLibraryState(vm: MusicViewModel, ui: UiModel): LibraryState {
         when (ui.sortOf(LibrarySection.Playlists)) {
             SortKey.NameAsc -> playlists.sortedBy { it.name.lowercase() }
             SortKey.NameDesc -> playlists.sortedByDescending { it.name.lowercase() }
-            else -> playlists.sortedByDescending { it.createdAt }
+            else -> playlists.sortedByDescending { it.lastEdited }
         }
     }
     val root = remember(vm.musicFolder) {
@@ -113,6 +114,7 @@ fun rememberLibraryState(vm: MusicViewModel, ui: UiModel): LibraryState {
         cursor = ui.cursors[section] ?: 0,
         loading = loading,
         totalSongs = songs.size,
+        folder = vm.musicFolder,
     )
 }
 

@@ -1,5 +1,6 @@
 package com.oxoghost.hexaplayer.ui.state
 
+import android.net.Uri
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
@@ -8,6 +9,7 @@ import androidx.media3.common.Player
 import com.oxoghost.hexaplayer.data.Album
 import com.oxoghost.hexaplayer.data.Playlist
 import com.oxoghost.hexaplayer.data.Song
+import com.oxoghost.hexaplayer.repository.CoverChange
 import com.oxoghost.hexaplayer.viewmodel.MusicViewModel
 
 enum class RepeatState { Off, All, One }
@@ -71,6 +73,7 @@ interface PlaybackActions {
     fun shuffle(songs: List<Song>, source: String? = null)
     fun addToQueue(song: Song)
     fun addAllToQueue(songs: List<Song>)
+    fun playNext(songs: List<Song>)
 }
 
 enum class Tab { Home, Library, Search, Download }
@@ -89,14 +92,42 @@ interface NavActions {
     fun back()
 }
 
-/** 1.x dialogs bridged until the phase 3 screens replace them. */
+/** Sheets, playlists, sleep timer and tag editing. */
 interface MenuActions {
-    fun songMenu(song: Song)
-    fun addToPlaylist(songs: List<Song>)
+    fun songMenu(song: Song, playlist: Playlist? = null)
+    fun songAction(song: Song, action: SongAction, playlist: Playlist?)
+    fun addToPlaylist(songs: List<Song>, label: String? = null)
+    fun addToPlaylists(songs: List<Song>, playlistIds: List<String>, newName: String?)
     fun createPlaylist()
-    fun playlistMenu(playlist: Playlist)
+    fun editPlaylist(playlist: Playlist)
+    fun savePlaylist(playlist: Playlist?, name: String, cover: CoverChange)
+    fun deletePlaylist(playlist: Playlist)
+    fun pickPlaylistCover(playlist: Playlist)
+    fun pickImage(onPicked: (Uri) -> Unit)
     fun addSongsTo(playlist: Playlist)
+    fun removeFromPlaylist(playlist: Playlist, song: Song)
+    fun movePlaylistSong(playlist: Playlist, from: Song, to: Song)
     fun sleepTimer()
+    fun setSleepTimer(seconds: Long)
+    fun cancelSleepTimer()
+    fun editSongs(songs: List<Song>)
+    fun saveTags(edit: EditState)
+    fun closeSheet()
+}
+
+/** Actions on the songs picked in multi-select. */
+interface SelectionActions {
+    fun selectionPlayNext()
+    fun selectionQueue()
+    fun selectionAddTo()
+    fun selectionEdit()
+}
+
+/** Empty library and first launch. */
+interface SetupActions {
+    fun rescan()
+    fun chooseFolder()
+    fun scanAllAudio()
 }
 
 interface LibraryActions {
@@ -127,4 +158,4 @@ interface LyricsActions {
 }
 
 /** Everything a screen can do. Both skins call the same implementation. */
-interface HexaActions : PlaybackActions, NavActions, MenuActions, LibraryActions, SearchActions, QueueActions, LyricsActions
+interface HexaActions : PlaybackActions, NavActions, MenuActions, SelectionActions, SetupActions, LibraryActions, SearchActions, QueueActions, LyricsActions

@@ -28,7 +28,7 @@ enum class SortKey(val terminal: String, val material: String) {
     NameAsc("name ↑", "Name A to Z"),
     NameDesc("name ↓", "Name Z to A"),
     SongCount("songs ↓", "Most songs"),
-    Created("created ↓", "Recently created"),
+    Edited("edited ↓", "Recently edited"),
 }
 
 val LibrarySection.sortKeys: List<SortKey>
@@ -36,7 +36,7 @@ val LibrarySection.sortKeys: List<SortKey>
         LibrarySection.Songs -> listOf(SortKey.TitleAsc, SortKey.TitleDesc, SortKey.Artist, SortKey.Album, SortKey.Duration, SortKey.DateAdded)
         LibrarySection.Albums -> listOf(SortKey.NameAsc, SortKey.NameDesc, SortKey.Artist, SortKey.SongCount)
         LibrarySection.Artists -> listOf(SortKey.NameAsc, SortKey.NameDesc, SortKey.SongCount)
-        LibrarySection.Playlists -> listOf(SortKey.Created, SortKey.NameAsc, SortKey.NameDesc)
+        LibrarySection.Playlists -> listOf(SortKey.Edited, SortKey.NameAsc, SortKey.NameDesc)
         LibrarySection.Folders -> listOf(SortKey.NameAsc, SortKey.NameDesc)
     }
 
@@ -55,6 +55,18 @@ class UiModel(application: Application) : AndroidViewModel(application) {
     var searchQuery by mutableStateOf("")
     var searchScope by mutableStateOf(SearchScope.All)
     val searchHistory = mutableStateListOf<String>().apply { addAll(loadHistory()) }
+
+    var sheet by mutableStateOf<Sheet?>(null)
+    val selection = Selection()
+
+    /** First launch done (or the app was set up before 2.0). */
+    var onboarded by mutableStateOf(prefs.getBoolean("onboarded", false))
+        private set
+
+    fun finishOnboarding() {
+        onboarded = true
+        prefs.edit().putBoolean("onboarded", true).apply()
+    }
 
     fun sortOf(s: LibrarySection): SortKey = sorts[s] ?: s.sortKeys.first()
 
