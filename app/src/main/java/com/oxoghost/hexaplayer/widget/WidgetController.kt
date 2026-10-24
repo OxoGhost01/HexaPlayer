@@ -1,102 +1,109 @@
 package com.oxoghost.hexaplayer.widget
 
-import android.app.PendingIntent
-import android.appwidget.AppWidgetManager
-import android.content.ComponentName
-import android.content.Context
-import android.content.Intent
 import android.content.ContentUris
+import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.PorterDuff
+import android.graphics.PorterDuffXfermode
+import android.graphics.RectF
 import android.net.Uri
-import com.oxoghost.hexaplayer.service.MusicService
+import androidx.glance.appwidget.GlanceAppWidgetManager
+import androidx.glance.appwidget.state.updateAppWidgetState
 
+/** Playback state shared between the music service and the home screen widgets. */
 object WidgetController {
 
     const val ACTION_PLAY_PAUSE = "com.oxoghost.hexaplayer.widget.PLAY_PAUSE"
     const val ACTION_NEXT       = "com.oxoghost.hexaplayer.widget.NEXT"
     const val ACTION_PREVIOUS   = "com.oxoghost.hexaplayer.widget.PREVIOUS"
-    const val ACTION_REPEAT     = "com.oxoghost.hexaplayer.widget.REPEAT"
-    const val ACTION_SHUFFLE    = "com.oxoghost.hexaplayer.widget.SHUFFLE"
+    const val ACTION_RESUME     = "com.oxoghost.hexaplayer.widget.RESUME"
 
-    private const val PREFS        = "widget_prefs"
-    private const val KEY_TITLE    = "widget_title"
-    private const val KEY_ARTIST   = "widget_artist"
-    private const val KEY_ALBUM_ID = "widget_album_id"
-    private const val KEY_PLAYING  = "widget_is_playing"
-    private const val ART_SIZE_PX  = 300
+    private const val PREFS = "widget_prefs"
 
-    fun saveState(context: Context, title: String, artist: String, albumId: Long, isPlaying: Boolean) {
+    fun saveState(context: Context, title: String, artist: String, albumId: Long, isPlaying: Boolean, positionMs: Long, durationMs: Long) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
-            .putString(KEY_TITLE, title)
-            .putString(KEY_ARTIST, artist)
-            .putLong(KEY_ALBUM_ID, albumId)
-            .putBoolean(KEY_PLAYING, isPlaying)
+            .putString("widget_title", title)
+            .putString("widget_artist", artist)
+            .putLong("widget_album_id", albumId)
+            .putBoolean("widget_is_playing", isPlaying)
+            .putLong("widget_position", positionMs)
+            .putLong("widget_duration", durationMs)
             .apply()
     }
 
-    fun getTitle(context: Context): String =
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY_TITLE, "") ?: ""
+    /** Nothing loaded in the player: the widgets show their idle state with Resume. */
+    fun saveIdle(context: Context) = saveState(context, "", "", -1L, false, 0L, 0L)
 
-    fun getArtist(context: Context): String =
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY_ARTIST, "") ?: ""
+    fun read(context: Context): WidgetData {
+        val p = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        return WidgetData(
+            title = p.getString("widget_title", "").orEmpty(),
+            artist = p.getString("widget_artist", "").orEmpty(),
+            albumId = p.getLong("widget_album_id", -1L),
+            isPlaying = p.getBoolean("widget_is_playing", false),
+            positionMs = p.getLong("widget_position", 0L),
+            durationMs = p.getLong("widget_duration", 0L),
+        )
+    }
 
-    fun getAlbumId(context: Context): Long =
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getLong(KEY_ALBUM_ID, -1L)
-
-    fun isPlaying(context: Context): Boolean =
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_PLAYING, false)
-
-    fun loadAlbumArt(context: Context, albumId: Long): Bitmap? {
+    /** Square-cropped album art, [sizePx] wide. */
+    fun loadAlbumArt(context: Context, albumId: Long, sizePx: Int = 300): Bitmap? {
         if (albumId <= 0L) return null
         return try {
-            val uri = ContentUris.withAppendedId(
-                Uri.parse("content://media/external/audio/albumart"), albumId
-            )
+            val uri = ContentUris.withAppendedId(Uri.parse("content://media/external/audio/albumart"), albumId)
             val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
             context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
             var sample = 1
-            while (minOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= ART_SIZE_PX) sample *= 2
+            while (minOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= sizePx) sample *= 2
             val opts = BitmapFactory.Options().apply { inSampleSize = sample }
-            val raw = context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, opts) }
-                ?: return null
+            val raw = context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, opts) } ?: return null
             val size = minOf(raw.width, raw.height)
-            val x = (raw.width - size) / 2
-            val y = (raw.height - size) / 2
-            Bitmap.createBitmap(raw, x, y, size, size)
-        } catch (_: Exception) { null }
-    }
-
-    fun pendingIntent(context: Context, action: String, requestCode: Int): PendingIntent {
-        val intent = Intent(context, MusicService::class.java).apply { this.action = action }
-        return PendingIntent.getService(
-            context, requestCode, intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-    }
-
-    fun openAppIntent(context: Context): PendingIntent {
-        val intent = context.packageManager.getLaunchIntentForPackage(context.packageName) ?: Intent()
-        return PendingIntent.getActivity(
-            context, 0, intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-    }
-
-    fun updateAllWidgets(context: Context) {
-        triggerUpdate(context, HexaWidget4x1::class.java)
-        triggerUpdate(context, HexaWidget5x1::class.java)
-    }
-
-    private fun triggerUpdate(context: Context, cls: Class<*>) {
-        val manager = AppWidgetManager.getInstance(context)
-        val ids = manager.getAppWidgetIds(ComponentName(context, cls))
-        if (ids.isNotEmpty()) {
-            val intent = Intent(AppWidgetManager.ACTION_APPWIDGET_UPDATE).apply {
-                component = ComponentName(context, cls)
-                putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, ids)
-            }
-            context.sendBroadcast(intent)
+            val square = Bitmap.createBitmap(raw, (raw.width - size) / 2, (raw.height - size) / 2, size, size)
+            Bitmap.createScaledBitmap(square, sizePx, sizePx, true)
+        } catch (_: Exception) {
+            null
         }
     }
+
+    /** The terminal pixel cover: averaged down to [cells] x [cells], then scaled up without smoothing. */
+    fun pixelate(bitmap: Bitmap, cells: Int, sizePx: Int): Bitmap {
+        val small = Bitmap.createScaledBitmap(bitmap, cells, cells, true)
+        return Bitmap.createScaledBitmap(small, sizePx, sizePx, false)
+    }
+
+    /** Rounded corners drawn into the bitmap, since widgets can't clip images before Android 12. */
+    fun rounded(bitmap: Bitmap, radiusPx: Float): Bitmap {
+        val out = Bitmap.createBitmap(bitmap.width, bitmap.height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(out)
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+        canvas.drawRoundRect(RectF(0f, 0f, bitmap.width.toFloat(), bitmap.height.toFloat()), radiusPx, radiusPx, paint)
+        paint.xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC_IN)
+        canvas.drawBitmap(bitmap, 0f, 0f, paint)
+        return out
+    }
+
+    suspend fun updateAllWidgets(context: Context) {
+        val now = System.currentTimeMillis()
+        listOf(WideWidget(), SlimWidget()).forEach { widget ->
+            GlanceAppWidgetManager(context).getGlanceIds(widget.javaClass).forEach { id ->
+                updateAppWidgetState(context, id) { it[VersionKey] = now }
+                widget.update(context, id)
+            }
+        }
+    }
+}
+
+data class WidgetData(
+    val title: String,
+    val artist: String,
+    val albumId: Long,
+    val isPlaying: Boolean,
+    val positionMs: Long,
+    val durationMs: Long,
+) {
+    val idle: Boolean get() = title.isBlank()
+    val fraction: Float get() = if (durationMs > 0) (positionMs.toFloat() / durationMs).coerceIn(0f, 1f) else 0f
 }

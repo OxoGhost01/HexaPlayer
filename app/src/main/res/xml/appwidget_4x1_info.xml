@@ -4,8 +4,11 @@
     android:minHeight="72dp"
     android:targetCellWidth="4"
     android:targetCellHeight="1"
-    android:resizeMode="none"
+    android:minResizeWidth="250dp"
+    android:minResizeHeight="64dp"
+    android:resizeMode="horizontal|vertical"
     android:updatePeriodMillis="0"
-    android:initialLayout="@layout/widget_4x1"
+    android:initialLayout="@layout/glance_default_loading_layout"
+    android:previewLayout="@layout/glance_default_loading_layout"
     android:widgetCategory="home_screen"
     android:description="@string/widget_4x1_desc"/>

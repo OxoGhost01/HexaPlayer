@@ -37,6 +37,11 @@ import com.oxoghost.hexaplayer.repository.PlaylistRepository
 import com.oxoghost.hexaplayer.repository.QueueStore
 import com.oxoghost.hexaplayer.widget.WidgetController
 import java.util.concurrent.Executors
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 
 @UnstableApi
@@ -53,7 +58,7 @@ class MusicService : MediaLibraryService() {
     private var lastBrowseParentId: String = ""
     private var lastBrowseItems: List<String> = emptyList()
 
-    // Internal shuffle state — owned here so both the phone app and Android Auto
+    // Internal shuffle state: owned here so both the phone app and Android Auto
     // drive the SAME shuffler (a manual reorder of upcoming items). ExoPlayer's own
     // shuffleModeEnabled is always kept false so it never re-orders on top of ours.
     private var shuffleOn = false
@@ -134,6 +139,7 @@ class MusicService : MediaLibraryService() {
     private val saveHandler = Handler(Looper.getMainLooper())
     private val saveQueue = Runnable {
         mediaLibrarySession?.player?.let { queueStore.save(it, shuffleOn) }
+        pushWidgetState()
         // Keep the position fresh while playing.
         if (mediaLibrarySession?.player?.isPlaying == true) saveQueueSoon(POSITION_SAVE_MS)
     }
@@ -144,14 +150,36 @@ class MusicService : MediaLibraryService() {
         saveHandler.postDelayed(saveQueue, delayMs)
     }
 
+    private val widgetScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
     private fun pushWidgetState() {
         val player = mediaLibrarySession?.player ?: return
-        val meta   = player.currentMediaItem?.mediaMetadata ?: return
-        val title   = meta.title?.toString() ?: ""
-        val artist  = meta.artist?.toString() ?: ""
-        val albumId = meta.extras?.getLong("albumId", -1L) ?: -1L
-        WidgetController.saveState(this, title, artist, albumId, player.isPlaying)
-        WidgetController.updateAllWidgets(this)
+        val meta = player.currentMediaItem?.mediaMetadata
+        if (meta == null) {
+            WidgetController.saveIdle(this)
+        } else {
+            WidgetController.saveState(
+                this,
+                title = meta.title?.toString().orEmpty(),
+                artist = meta.artist?.toString().orEmpty(),
+                albumId = meta.extras?.getLong("albumId", -1L) ?: -1L,
+                isPlaying = player.isPlaying,
+                positionMs = player.currentPosition.coerceAtLeast(0L),
+                durationMs = player.duration.coerceAtLeast(0L),
+            )
+        }
+        widgetScope.launch { WidgetController.updateAllWidgets(this@MusicService) }
+    }
+
+    /** Widget Resume: puts the remembered queue back and plays it. */
+    private fun resumeRemembered(player: Player) {
+        if (player.mediaItemCount == 0) {
+            val saved = queueStore.load() ?: return
+            player.setMediaItems(saved.items.map { it.toMediaItem() }, saved.index, saved.positionMs)
+            player.repeatMode = saved.repeat
+            player.prepare()
+        }
+        player.play()
     }
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
@@ -185,18 +213,11 @@ class MusicService : MediaLibraryService() {
         val player = mediaLibrarySession?.player ?: return result
         when (intent?.action) {
             WidgetController.ACTION_PLAY_PAUSE -> {
-                if (player.isPlaying) player.pause() else player.play()
+                if (player.isPlaying) player.pause() else resumeRemembered(player)
             }
             WidgetController.ACTION_NEXT     -> player.seekToNextMediaItem()
             WidgetController.ACTION_PREVIOUS -> player.seekToPreviousMediaItem()
-            WidgetController.ACTION_REPEAT   -> {
-                player.repeatMode = when (player.repeatMode) {
-                    Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ALL
-                    Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
-                    else                   -> Player.REPEAT_MODE_OFF
-                }
-            }
-            WidgetController.ACTION_SHUFFLE  -> { /* no-op: ViewModel owns shuffle state */ }
+            WidgetController.ACTION_RESUME   -> resumeRemembered(player)
         }
         return result
     }
@@ -223,6 +244,10 @@ class MusicService : MediaLibraryService() {
         mediaLibrarySession = null
         audioSessionId = 0
         ioExecutor.shutdown()
+        WidgetController.saveIdle(this)
+        // The scope dies with the service, so this last refresh runs on its own.
+        CoroutineScope(Dispatchers.Default).launch { WidgetController.updateAllWidgets(applicationContext) }
+        widgetScope.cancel()
         super.onDestroy()
     }
 
@@ -261,7 +286,7 @@ class MusicService : MediaLibraryService() {
     }
 
     /**
-     * The internal shuffler — mirrors the phone app's behavior:
+     * The internal shuffler, mirroring the phone app's behavior:
      * - Turning ON shuffles only the upcoming context items (everything after the
      *   current track and the user-queue block), leaving the current track and the
      *   user queue untouched.
@@ -443,7 +468,7 @@ class MusicService : MediaLibraryService() {
         }
 
         /**
-         * Resolves media items by mediaId to playable URIs — used by voice commands and direct play.
+         * Resolves media items by mediaId to playable URIs, used by voice commands and direct play.
          */
         override fun onAddMediaItems(
             mediaSession: MediaSession,
@@ -524,7 +549,7 @@ class MusicService : MediaLibraryService() {
             ) {
                 lastBrowseItems
             } else {
-                // Fallback: build album queue — matches phone app behavior
+                // Fallback: build the album queue, as the phone app does
                 val songId = clickedId.removePrefix("song:").toLongOrNull()
                 val song = if (songId != null) {
                     musicRepo.getAllSongs().firstOrNull { it.id == songId }
@@ -583,7 +608,7 @@ class MusicService : MediaLibraryService() {
             }
 
             parentId == TAB_SONGS -> {
-                // Top-level song list — no context; album fallback used in onSetMediaItems
+                // Top-level song list, no context: album fallback used in onSetMediaItems
                 lastBrowseParentId = ""
                 lastBrowseItems = emptyList()
                 val songs = musicRepo.getAllSongs()
