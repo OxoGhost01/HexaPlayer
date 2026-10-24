@@ -1,6 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <dimen name="player_top_padding">24dp</dimen>
-    <dimen name="accent_circle_size">52dp</dimen>
-    <dimen name="accent_circle_margin">6dp</dimen>
-</resources>

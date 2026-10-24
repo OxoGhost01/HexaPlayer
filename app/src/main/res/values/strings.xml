@@ -1,248 +1,33 @@
 <resources>
     <string name="app_name">HexaPlayer</string>
-    <string name="nav_home">Home</string>
-    <string name="nav_download">Download</string>
-    <string name="nav_equalizer">Equalizer</string>
-    <string name="nav_settings">Settings</string>
-    <string name="filter_all_songs">All Songs</string>
-    <string name="filter_albums">Albums</string>
-    <string name="filter_artists">Artists</string>
-    <string name="filter_playlists">Playlists</string>
-    <string name="filter_folders">Folders</string>
-    <string name="unknown_artist">Unknown Artist</string>
-    <string name="unknown_album">Unknown Album</string>
-    <string name="create_playlist">Create Playlist</string>
-    <string name="playlist_name_hint">Playlist name</string>
-    <string name="add_to_playlist">Add to playlist</string>
-    <string name="new_playlist">New playlist</string>
     <string name="song_added">Song added to playlist</string>
     <string name="songs_added_to">%1$d songs added to %2$s</string>
     <string name="playlist_created">Playlist created</string>
     <string name="playlist_deleted">Playlist deleted</string>
-    <string name="delete_playlist">Delete playlist</string>
-    <string name="no_songs">No songs found</string>
-    <string name="no_permission">Storage permission is required to read music files.</string>
-    <string name="grant_permission">Grant Permission</string>
 
-    <!-- Settings -->
-    <string name="settings_music_folder">Music Library</string>
-    <string name="settings_music_folder_hint">Relative path  (e.g. Music or Music/Albums)</string>
-    <string name="settings_music_folder_desc">Enter a path relative to your device\'s internal storage root.\n\nExamples:\n• Leave empty → scan all audio on the device\n• Music → only scan /sdcard/Music/\n• Music/Rock → only scan /sdcard/Music/Rock/\n\nTip: use the Folders tab in Home to find the exact path of a folder.</string>
-    <string name="settings_scan">Rescan Library</string>
-    <string name="settings_scan_done">Library updated</string>
-    <string name="settings_donate">Buy me a coffee ☕</string>
-    <string name="settings_accent_color">Accent Color</string>
-    <string name="settings_accent_restart">Accent applied. Tap Rescan or navigate away to refresh all colors.</string>
-    <string name="settings_library">Library</string>
-    <string name="settings_sort_by">Sort Songs By</string>
-    <string name="settings_show_unknown">Show Unknown Songs</string>
-    <string name="settings_show_unknown_desc">Include tracks with no artist or title metadata</string>
-    <string name="settings_playback">Playback</string>
-    <string name="settings_skip_silence">Skip Silence</string>
-    <string name="settings_skip_silence_desc">Automatically skip silent sections (coming soon)</string>
-    <string name="settings_gapless">Gapless Playback</string>
-    <string name="settings_gapless_desc">Reduce gaps between consecutive tracks</string>
-    <string name="settings_crossfade">Crossfade Duration</string>
-    <string name="settings_crossfade_off">Off</string>
-    <string name="settings_crossfade_desc">Fade between tracks (coming soon)</string>
-
-    <!-- Accent names -->
-    <string name="accent_purple">Purple</string>
-    <string name="accent_deep_purple">Deep Purple</string>
-    <string name="accent_blue">Blue</string>
-    <string name="accent_teal">Teal</string>
-    <string name="accent_pink">Pink</string>
-    <string name="accent_orange">Orange</string>
-
-    <!-- Sort options -->
-    <string-array name="sort_options">
-        <item>Title A→Z</item>
-        <item>Title Z→A</item>
-        <item>Artist A→Z</item>
-        <item>Album A→Z</item>
-        <item>Duration ↑</item>
-        <item>Duration ↓</item>
-        <item>Date Added ↓</item>
-        <item>Date Added ↑</item>
-    </string-array>
-
-    <!-- Equalizer -->
-    <string name="eq_title">Equalizer</string>
-    <string name="eq_enable">Enable Equalizer</string>
-    <string name="eq_preset">Preset</string>
-    <string name="eq_preset_custom">Custom</string>
-    <string name="eq_reset">Reset Bands</string>
-    <string name="eq_bass_boost">Bass Boost</string>
-    <string name="eq_bass_boost_strength">Strength</string>
-    <string name="eq_virtualizer">Virtualizer (3D Surround)</string>
-    <string name="eq_virtualizer_strength">Strength</string>
-    <string name="eq_loudness">Loudness Enhancer</string>
-    <string name="eq_loudness_gain">Gain</string>
-    <string name="eq_reverb">Reverb</string>
-    <string name="eq_reverb_preset">Room Type</string>
-    <string name="eq_unavailable">Audio effects are not available on this device.</string>
-    <string-array name="reverb_presets">
-        <item>None</item>
-        <item>Small Room</item>
-        <item>Medium Room</item>
-        <item>Large Room</item>
-        <item>Medium Hall</item>
-        <item>Large Hall</item>
-        <item>Plate</item>
-    </string-array>
-
-    <!-- Download screen (spotDL running in Termux) -->
-    <string name="dl_title">Download &amp; Sync</string>
-    <string name="dl_subtitle">Download Spotify playlists, albums and tracks with spotDL running in Termux on your phone</string>
-
-    <!-- Setup helper (shown until connected) -->
-    <string name="dl_setup_header">Downloader</string>
-    <string name="dl_card_stopped">The downloader is not running. It starts by itself when you download, or start it now.</string>
-    <string name="dl_card_running">The downloader is running. To update or repair it, run the setup command again from the guide.</string>
-    <string name="dl_card_outdated">Your downloader is out of date. Open the setup guide and run the setup command again in Termux.</string>
-    <string name="dl_setup_body">Downloads run through the free Termux app, which runs spotDL on your phone. Follow the setup guide once, then HexaPlayer starts it for you.</string>
-    <string name="dl_setup_guide">Setup guide</string>
-    <string name="dl_start_server">Start downloader</string>
+    <!-- Download & Sync -->
     <string name="dl_setup_copied">Setup command copied</string>
 
-    <!-- Server config -->
-    <string name="dl_server_header">Server</string>
-    <string name="dl_test_connection">Test connection</string>
-    <string name="dl_test_success">Success</string>
-    <string name="dl_test_failure">Failure</string>
-
-    <!-- Link + folder -->
-    <string name="dl_link_hint">Spotify link (playlist, album or track)</string>
-    <string name="dl_custom_folder_switch">Use a custom folder name</string>
-    <string name="dl_folder_auto_hint">Downloads go to %1$s (your Music Library folder, set in Settings). Playlists and albums get a folder named after them.</string>
-    <string name="dl_folder_saved_to">Saved to %1$s</string>
-    <string name="dl_folder_name_hint">Folder name</string>
-    <string name="dl_download">Download</string>
-    <string name="dl_sync">Sync</string>
-
-    <!-- Sections -->
-    <string name="dl_section_syncs">Synced playlists</string>
-    <string name="dl_section_jobs">Downloads</string>
-    <string name="dl_resync">Re-sync</string>
-    <string name="dl_clear_done">Clear done</string>
-
-    <!-- Kinds / phases -->
-    <string name="dl_kind_download">Download</string>
-    <string name="dl_kind_sync">Sync</string>
-    <string name="dl_phase_server">Downloading</string>
-    <string name="dl_phase_importing">Adding to library…</string>
-
     <!-- Misc -->
-    <string name="dl_error_empty_link">Paste a Spotify link first</string>
-    <string name="dl_permission_banner">Storage permission needed to save downloads.</string>
-    <string name="dl_permission_grant">Grant</string>
-    <string name="dl_status_error">Error: %s</string>
-    <string name="dl_status_stopped">Stopped. %s</string>
-    <string name="dl_stop">Stop</string>
-    <string name="dl_retry">Run again</string>
     <string name="dl_setup_command">apt update &amp;&amp; apt full-upgrade -y &amp;&amp; curl -fsSL https://raw.githubusercontent.com/OxoGhost01/HexaPlayer/main/termux/setup.sh | bash</string>
-    <string name="permission_rationale">HexaPlayer needs access to your audio files to play music.</string>
-    <string name="songs_count">%d songs</string>
-    <string name="albums_count">%d albums</string>
-    <string name="items_count">%d items</string>
-    <string name="cancel">Cancel</string>
-    <string name="ok">OK</string>
-    <string name="delete">Delete</string>
-    <string name="rename">Rename</string>
-    <string name="search_hint">Search…</string>
-    <string name="add_cover">Add cover</string>
-    <string name="change_cover">Change cover</string>
-    <string name="clear_cover">Clear custom cover</string>
-    <string name="add_songs">Add songs</string>
-    <string name="songs_added">Songs added</string>
-    <string name="no_songs_to_add">All songs are already in this playlist</string>
-    <string name="sort_name_asc">↑ Name</string>
-    <string name="sort_name_desc">↓ Name</string>
-    <string name="sort_date_desc">↓ Date</string>
-    <string name="sort_date_asc">↑ Date</string>
-    <string name="play_next">Play next</string>
-    <string name="play_last">Add to queue</string>
     <string name="plays_next">Plays next</string>
     <string name="added_to_queue">Added to queue</string>
-    <string name="queue">Queue</string>
-    <string name="empty_queue">Queue is empty</string>
-    <string name="queue_shuffle_note">Shuffle is on: context queue drag is disabled (user queue always reorderable)</string>
-    <string name="play_all">▶  Play all</string>
-    <string name="shuffle_all">⇀  Shuffle</string>
-    <string name="remove_from_queue">Remove</string>
-    <string name="edit_playlist">Edit playlist</string>
     <string name="playlist_updated">Playlist updated</string>
-    <string name="swipe_plays_next">Plays next</string>
-    <string name="edit_song_info">Edit song info</string>
-    <string name="edit_song_dialog_title">Edit Song Info</string>
     <string name="song_info_updated">Song info updated</string>
     <string name="metadata_permission_needed">Cannot edit, permission denied</string>
-    <string name="sleep_timer">Sleep timer</string>
-    <string name="sleep_timer_cancel">Cancel timer</string>
-    <string name="sleep_timer_set">%d min timer set</string>
-    <string name="sleep_timer_custom">Custom…</string>
-    <string name="sleep_timer_range_note">10 seconds minimum · 10 hours maximum</string>
-    <!-- Resume on track change -->
-    <string name="settings_resume_on_track_change">Resume on track change</string>
-    <string name="settings_resume_on_track_change_desc">Resume playback when skipping while paused</string>
-    <!-- Lyrics -->
-    <string name="lyrics_searching">Searching for lyrics…</string>
-    <string name="lyrics_not_found">No lyrics found</string>
-    <string name="lyrics_plain_note">Synced lyrics not available</string>
 
     <!-- Auto-update -->
-    <string name="settings_check_updates">Check for updates</string>
-    <string name="update_checking">Checking for updates…</string>
-    <string name="update_available_label">Update available: v%s</string>
-    <string name="update_up_to_date">You\'re up to date</string>
-    <string name="update_error">Could not check for updates</string>
-    <string name="update_dialog_title">Update available</string>
-    <string name="update_dialog_message">Version %s is available. Download now?</string>
-    <string name="update_download">Download</string>
-    <string name="update_install">Install update</string>
     <string name="update_downloading">Downloading v%s…</string>
-    <string name="update_install_permission">Allow HexaPlayer to install apps, then tap Update again</string>
-    <string name="update_new_version">New version available!</string>
-    <string name="update_version_label">v%s</string>
-    <string name="update_not_now">Not now</string>
-    <string name="update_no_changelog">No release notes available.</string>
+    <string name="update_install_permission">Allow HexaPlayer to install apps, then tap Download again</string>
 
     <!-- Widgets -->
     <string name="widget_4x1_label">HexaPlayer (4×1)</string>
     <string name="widget_4x1_desc">4×1 player widget with album art and controls</string>
     <string name="widget_5x1_label">HexaPlayer (5×1)</string>
-    <string name="widget_5x1_desc">5×1 compact player widget with full controls</string>
+    <string name="widget_5x1_desc">5×1 compact player widget</string>
 
     <!-- Termux setup guide -->
-    <string name="back">Back</string>
-    <string name="tx_title">Downloader setup</string>
-    <string name="tx_intro">HexaPlayer downloads music with spotDL, a free tool that runs inside the Termux app on your phone. Nothing is sent to an outside server. You only do steps 1 to 3 once.</string>
-    <string name="tx_step_1">Step 1</string>
-    <string name="tx_install_title">Install Termux</string>
-    <string name="tx_install_body">Download Termux from F-Droid (tap Download APK) or from GitHub (tap the file ending in universal.apk). Do not use the Play Store version, it does not work with this setup. Open Termux once after installing it and wait for it to finish preparing.</string>
-    <string name="tx_install_fdroid">F-Droid</string>
-    <string name="tx_install_github">GitHub</string>
-    <string name="tx_installed">✓ Termux is installed</string>
-    <string name="tx_not_installed">Termux is not installed yet</string>
-    <string name="tx_step_2">Step 2</string>
-    <string name="tx_command_title">Run the setup command</string>
-    <string name="tx_command_body">Copy this command, paste it in Termux (long press, then Paste) and press Enter:</string>
-    <string name="tx_command_wait">Tap Allow when Termux asks for storage access. The first install can take 10 to 30 minutes because some parts are built on your phone. Keep Termux open until it prints Done.</string>
-    <string name="tx_command_button">Copy and open Termux</string>
     <string name="tx_termux_missing">Install Termux first (step 1)</string>
-    <string name="tx_step_3">Step 3</string>
-    <string name="tx_permission_title">Let HexaPlayer start Termux</string>
-    <string name="tx_permission_body">With this permission, HexaPlayer starts the downloader in the background when you start a download, and it stops by itself after 10 minutes without downloads. Without it, you have to open Termux and type hexadl yourself each time.</string>
-    <string name="tx_permission_button">Allow</string>
-    <string name="tx_permission_granted">✓ Permission granted</string>
-    <string name="tx_permission_missing">Permission not granted yet</string>
     <string name="tx_permission_denied">Permission denied. You can still type hexadl in Termux.</string>
-    <string name="tx_step_4">Step 4</string>
-    <string name="tx_start_title">Start the downloader</string>
-    <string name="tx_start_body">Optional: start it now to check that everything works. Termux shows a notification while it runs; it stops by itself after 10 minutes without downloads.</string>
-    <string name="tx_start_button">Start now</string>
     <string name="tx_start_manual">Open Termux and type hexadl, then come back</string>
-    <string name="tx_tips_label">Tips</string>
-    <string name="tx_tips_body">• If downloads stop when the screen is off, disable battery optimization for Termux in Android settings.\n• If the downloader says it cannot connect, run the setup command again: it is safe to repeat.\n• Music is saved in Music/HexaPlayer.</string>
-    <string name="tx_full_guide">Full guide on GitHub</string>
 </resources>

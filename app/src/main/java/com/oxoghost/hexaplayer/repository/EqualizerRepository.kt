@@ -58,7 +58,7 @@ class EqualizerRepository private constructor(private val context: Context) {
 
     private val prefs = context.getSharedPreferences("eq_prefs", Context.MODE_PRIVATE)
 
-    // Live effect objects — kept alive in this singleton so the native side doesn't die
+    // Live effect objects, kept alive in this singleton so the native side doesn't die
     private var equalizer: Equalizer? = null
     private var bassBoost: BassBoost? = null
     private var virtualizer: Virtualizer? = null

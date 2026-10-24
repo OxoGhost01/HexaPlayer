@@ -1,37 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="colorPrimary">#FFAA00FF</color>
-    <color name="colorPrimaryDark">#FF7B00B4</color>
-    <color name="colorSecondary">#FFE040FB</color>
     <color name="colorBackground">#FF0A0008</color>
-    <color name="colorSurface">#FF14001A</color>
-    <color name="colorSurfaceVariant">#FF22002E</color>
-    <color name="colorPlayerBar">#FF1A0028</color>
-    <color name="colorText">#FFFFFFFF</color>
-    <color name="colorTextSecondary">#FFCCAAFF</color>
-    <color name="colorDivider">#FF2A003A</color>
-    <color name="white">#FFFFFFFF</color>
-    <color name="black">#FF000000</color>
-    <color name="transparent">#00000000</color>
-    <color name="colorSuccess">#FF4CAF50</color>
-    <color name="colorFailure">#FFF44336</color>
-
-    <!-- Accent: Purple (default) -->
-    <color name="accent_purple_primary">#FFAA00FF</color>
-    <color name="accent_purple_secondary">#FFE040FB</color>
-    <!-- Accent: Deep Purple -->
-    <color name="accent_deep_purple_primary">#FF7C4DFF</color>
-    <color name="accent_deep_purple_secondary">#FFB388FF</color>
-    <!-- Accent: Blue -->
-    <color name="accent_blue_primary">#FF2979FF</color>
-    <color name="accent_blue_secondary">#FF82B1FF</color>
-    <!-- Accent: Teal -->
-    <color name="accent_teal_primary">#FF1DE9B6</color>
-    <color name="accent_teal_secondary">#FFA7FFEB</color>
-    <!-- Accent: Pink -->
-    <color name="accent_pink_primary">#FFF50057</color>
-    <color name="accent_pink_secondary">#FFFF4081</color>
-    <!-- Accent: Orange -->
-    <color name="accent_orange_primary">#FFFF6D00</color>
-    <color name="accent_orange_secondary">#FFFFAB40</color>
 </resources>
