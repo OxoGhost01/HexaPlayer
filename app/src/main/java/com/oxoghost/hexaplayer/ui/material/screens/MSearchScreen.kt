@@ -149,8 +149,30 @@ private fun LazyListScope.results(search: SearchState, playback: PlaybackState, 
             }
         }
     }
+    if (search.lyrics.isNotEmpty()) {
+        item { MSectionLabel("Lyrics", Modifier.padding(top = 16.dp)) }
+        itemsIndexed(search.lyrics, key = { _, hit -> "l${hit.song.id}" }) { i, hit ->
+            val s = MaterialTheme.colorScheme
+            MSegment(i, search.lyrics.size, Modifier.padding(bottom = 2.dp), onClick = {
+                actions.commitSearch()
+                actions.play(search.lyrics.map { it.song }, i, "search · $q")
+            }) {
+                CoverImage(hit.song.artModel, hit.song.albumKey, Modifier.size(44.dp), HexaShapes.coverList)
+                Column(Modifier.weight(1f)) {
+                    Text(hit.song.title, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(highlight("\u201C${hit.line}\u201D", q, s.primary, underline = false), color = s.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                }
+            }
+        }
+    }
     if (search.hits == 0) {
-        item { Text("No match for \"$q\"", Modifier.padding(vertical = 24.dp), color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        item {
+            Text(
+                if (search.scope == SearchScope.Lyrics) "No match in the lyrics saved on this phone" else "No match for \"$q\"",
+                Modifier.padding(vertical = 24.dp), color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 }
 

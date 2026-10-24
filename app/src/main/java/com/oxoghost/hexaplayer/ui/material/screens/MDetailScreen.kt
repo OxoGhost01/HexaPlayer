@@ -47,6 +47,7 @@ import com.oxoghost.hexaplayer.ui.common.artModel
 import com.oxoghost.hexaplayer.ui.common.formatDay
 import com.oxoghost.hexaplayer.ui.common.formatDuration
 import com.oxoghost.hexaplayer.ui.common.formatLengthLong
+import com.oxoghost.hexaplayer.ui.common.plural
 import com.oxoghost.hexaplayer.ui.common.rememberReorderState
 import com.oxoghost.hexaplayer.ui.common.reorderHandle
 import com.oxoghost.hexaplayer.ui.common.reorderItem
@@ -58,6 +59,7 @@ import com.oxoghost.hexaplayer.ui.material.components.MCircleButton
 import com.oxoghost.hexaplayer.ui.material.components.MIconButton
 import com.oxoghost.hexaplayer.ui.material.components.MPillButton
 import com.oxoghost.hexaplayer.ui.material.components.MSegment
+import com.oxoghost.hexaplayer.ui.material.components.MSegmentedGroup
 import com.oxoghost.hexaplayer.ui.material.components.MSelectionCircle
 import com.oxoghost.hexaplayer.ui.material.theme.HexaShapes
 import com.oxoghost.hexaplayer.ui.state.DetailKey
@@ -105,7 +107,10 @@ private fun AlbumContent(detail: DetailState, playback: PlaybackState, actions: 
                         style = MaterialTheme.typography.titleMedium,
                     )
                     Text(
-                        listOfNotNull(detail.year.takeIf { it > 0 }?.toString(), "${songs.size} songs", formatLengthLong(detail.durationMs)).joinToString(" · "),
+                        listOfNotNull(
+                            detail.year.takeIf { it > 0 }?.toString(), "${songs.size} songs", formatLengthLong(detail.durationMs),
+                            detail.totalPlays.takeIf { it > 0 }?.let { plural(it, "play") },
+                        ).joinToString(" · "),
                         color = s.onSurfaceVariant,
                         style = MaterialTheme.typography.bodyMedium,
                     )
@@ -196,6 +201,23 @@ private fun ArtistContent(detail: DetailState, playback: PlaybackState, actions:
                                 maxLines = 1, overflow = TextOverflow.Ellipsis)
                             Text(album.year.takeIf { it > 0 }?.toString() ?: "${album.songs.size} songs", Modifier.padding(start = 4.dp),
                                 color = s.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
+                        }
+                    }
+                }
+            }
+        }
+        if (detail.mostPlayed.isNotEmpty()) {
+            item { Heading("Most played", Modifier.padding(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 8.dp)) }
+            item {
+                MSegmentedGroup(Modifier.padding(horizontal = 16.dp)) {
+                    detail.mostPlayed.forEachIndexed { i, (song, plays) ->
+                        MSegment(i, detail.mostPlayed.size, onClick = { actions.play(detail.mostPlayed.map { it.first }, i, detail.source) }) {
+                            CoverImage(song.artModel, song.albumKey, Modifier.size(44.dp), HexaShapes.coverList)
+                            Column(Modifier.weight(1f)) {
+                                Text(song.title, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text(song.album, color = s.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium, maxLines = 1)
+                            }
+                            Text(plural(plays, "play"), color = s.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
                         }
                     }
                 }
