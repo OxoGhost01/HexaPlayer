@@ -35,7 +35,7 @@ from pydantic import BaseModel
 # --------------------------------------------------------------------------- #
 
 # Bump when the app needs a newer server; the app asks users to re-run setup below its minimum
-SERVER_VERSION = 2
+SERVER_VERSION = 3
 
 ROOT = Path(os.environ.get("HEXADL_ROOT", "./music")).resolve()
 # Jobs may write anywhere under shared storage (the app's Music Library folder)
@@ -64,6 +64,7 @@ app = FastAPI(title="HexaDL", description="spotDL companion server for HexaPlaye
 # (0 = never), so the wake lock is not held all day.
 IDLE_MINUTES = float(os.environ.get("HEXADL_IDLE_MINUTES", "10"))
 _last_activity = time.time()
+_SERVER = None  # set in __main__ so /shutdown can stop it
 
 
 @app.middleware("http")
@@ -271,7 +272,13 @@ def _spotdl_version() -> str:
 
 @app.get("/health")
 def health() -> dict:
-    return {"ok": True, "spotdl": _spotdl_version(), "server": SERVER_VERSION, "root": str(ROOT)}
+    return {
+        "ok": True,
+        "spotdl": _spotdl_version(),
+        "server": SERVER_VERSION,
+        "root": str(ROOT),
+        "idle_minutes": IDLE_MINUTES,
+    }
 
 
 @app.post("/jobs")
@@ -339,6 +346,22 @@ def stop_job(job_id: str) -> dict:
         except ProcessLookupError:
             pass
     return job.as_dict()
+
+
+@app.post("/shutdown")
+def shutdown() -> dict:
+    """Stops the running jobs, then the server. HexaPlayer starts it again when needed."""
+    with JOBS_LOCK:
+        running = [j for j in JOBS.values() if j.status == "running" and j.proc is not None]
+    for job in running:
+        job.stop_requested = True
+        try:
+            os.killpg(job.proc.pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
+    if _SERVER is not None:
+        _SERVER.should_exit = True
+    return {"ok": True, "stopped_jobs": len(running)}
 
 
 @app.get("/jobs")
@@ -415,6 +438,7 @@ if __name__ == "__main__":
         print(f"WARNING: '{SPOTDL_BIN}' not found on PATH, jobs will fail.")
     print(f"HexaDL serving on http://{host}:{port}  (downloads -> {ROOT})")
     server = uvicorn.Server(uvicorn.Config(app, host=host, port=port))
+    _SERVER = server
     if IDLE_MINUTES > 0:
         threading.Thread(target=_idle_watchdog, args=(server,), daemon=True).start()
     server.run()
