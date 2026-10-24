@@ -7,6 +7,12 @@ import android.media.audiofx.Equalizer
 import android.media.audiofx.LoudnessEnhancer
 import android.media.audiofx.PresetReverb
 import android.media.audiofx.Virtualizer
+import org.json.JSONArray
+import org.json.JSONObject
+import kotlin.math.abs
+
+/** A preset saved by the user: one level per device band, in millibels. */
+data class UserPreset(val name: String, val levelsMb: List<Int>)
 
 /**
  * Singleton that holds and persists all audio-effect state.
@@ -17,6 +23,30 @@ import android.media.audiofx.Virtualizer
 class EqualizerRepository private constructor(private val context: Context) {
 
     companion object {
+        /** Centre frequencies of the 1.x curves below. */
+        val CURVE_FREQS = intArrayOf(32, 64, 125, 250, 500, 1000, 2000, 4000, 8000, 16000)
+
+        /** The 1.x presets, in dB for each of [CURVE_FREQS]. */
+        val CURVES: List<Pair<String, FloatArray>> = listOf(
+            "Flat" to floatArrayOf(0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f),
+            "Bass Boost" to floatArrayOf(6f, 5f, 4f, 2f, 0f, 0f, 0f, 0f, 0f, 0f),
+            "Treble Boost" to floatArrayOf(0f, 0f, 0f, 0f, 0f, 0f, 2f, 4f, 5f, 6f),
+            "Rock" to floatArrayOf(4f, 3f, 2f, 0f, -1f, 0f, 0f, 2f, 3f, 4f),
+            "Pop" to floatArrayOf(-2f, -1f, 0f, 2f, 4f, 4f, 2f, 0f, -1f, -1f),
+            "Electronic" to floatArrayOf(4f, 4f, 1f, -2f, -1f, 2f, 1f, 2f, 4f, 5f),
+            "Hip-Hop" to floatArrayOf(5f, 4f, 1f, -1f, -1f, -1f, 1f, 2f, 3f, 4f),
+            "Jazz" to floatArrayOf(0f, 0f, 0f, 2f, 4f, 4f, 3f, 2f, 2f, 3f),
+            "Classical" to floatArrayOf(4f, 3f, 2f, 0f, 0f, -1f, 0f, 2f, 3f, 4f),
+            "R&B" to floatArrayOf(6f, 4f, 0f, -2f, -2f, 2f, 2f, 3f, 4f, 5f),
+            "Acoustic" to floatArrayOf(4f, 3f, 2f, 1f, 2f, 3f, 3f, 2f, 2f, 2f),
+            "Dance" to floatArrayOf(5f, 4f, 1f, 0f, 2f, 3f, 4f, 3f, 1f, 0f),
+            "Lounge" to floatArrayOf(-1f, -1f, 0f, 2f, 3f, 3f, 2f, 1f, 1f, 1f),
+            "Metal" to floatArrayOf(5f, 4f, -1f, -2f, 0f, 3f, 4f, 5f, 5f, 5f),
+            "Piano" to floatArrayOf(0f, 0f, 0f, 3f, 4f, 5f, 3f, 4f, 5f, 3f),
+            "Vocal Boost" to floatArrayOf(-2f, -2f, 0f, 3f, 5f, 5f, 4f, 2f, 0f, -1f),
+            "Late Night" to floatArrayOf(3f, 2f, 0f, -1f, -2f, -2f, 0f, 2f, 4f, 5f),
+        )
+
         @Volatile
         private var INSTANCE: EqualizerRepository? = null
 
@@ -37,11 +67,12 @@ class EqualizerRepository private constructor(private val context: Context) {
 
     var isInitialized = false
         private set
+    private var session = 0
 
     fun initEffects(audioSessionId: Int) {
         if (audioSessionId == 0) return
         // Don't re-init if already attached to the same session
-        if (isInitialized && equalizer != null) return
+        if (isInitialized && equalizer != null && audioSessionId == session) return
         releaseEffects()
         try {
             equalizer = Equalizer(0, audioSessionId).apply {
@@ -64,6 +95,7 @@ class EqualizerRepository private constructor(private val context: Context) {
                 enabled = reverbEnabled
                 preset = reverbPreset
             }
+            session = audioSessionId
             isInitialized = true
         } catch (e: Exception) {
             isInitialized = false
@@ -118,6 +150,41 @@ class EqualizerRepository private constructor(private val context: Context) {
             edit.putInt("band_$band", eq.getBandLevel(band.toShort()).toInt())
         }
         edit.apply()
+    }
+
+    /** Name of the preset the bands came from, or null once a band is moved by hand. */
+    var presetName: String?
+        get() = prefs.getString("preset_name", null)
+        set(v) { prefs.edit().putString("preset_name", v).apply() }
+
+    /** Applies one of the 1.x curves (gains in dB for 32 Hz .. 16 kHz) to the nearest device bands. */
+    fun applyCurve(gainsDb: FloatArray) {
+        val eq = equalizer ?: return
+        val (minMb, maxMb) = eq.bandLevelRange.let { it[0].toInt() to it[1].toInt() }
+        for (band in 0 until eq.numberOfBands) {
+            val hz = eq.getCenterFreq(band.toShort()) / 1000
+            val nearest = CURVE_FREQS.indices.minByOrNull { abs(CURVE_FREQS[it] - hz) } ?: continue
+            setBandLevel(band, (gainsDb.getOrElse(nearest) { 0f } * 100).toInt().coerceIn(minMb, maxMb).toShort())
+        }
+    }
+
+    var userPresets: List<UserPreset>
+        get() = runCatching {
+            val arr = JSONArray(prefs.getString("user_presets", "[]"))
+            (0 until arr.length()).map { i ->
+                val o = arr.getJSONObject(i)
+                val levels = o.getJSONArray("levels")
+                UserPreset(o.getString("name"), (0 until levels.length()).map { levels.getInt(it) })
+            }
+        }.getOrDefault(emptyList())
+        set(list) {
+            val arr = JSONArray()
+            list.forEach { arr.put(JSONObject().put("name", it.name).put("levels", JSONArray(it.levelsMb))) }
+            prefs.edit().putString("user_presets", arr.toString()).apply()
+        }
+
+    fun applyUserPreset(preset: UserPreset) {
+        preset.levelsMb.forEachIndexed { band, level -> setBandLevel(band, level.toShort()) }
     }
 
     fun resetBands() {
