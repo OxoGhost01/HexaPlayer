@@ -13,6 +13,14 @@
         <item name="android:windowLightStatusBar" tools:targetApi="23">false</item>
     </style>
 
+    <!-- Open with: a sheet over the calling app -->
+    <style name="Theme.HexaPlayer.Translucent" parent="Theme.HexaPlayer">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowAnimationStyle">@null</item>
+        <item name="android:backgroundDimEnabled">false</item>
+    </style>
+
     <style name="Theme.HexaPlayer.DeepPurple" parent="Theme.HexaPlayer">
         <item name="colorPrimary">@color/accent_deep_purple_primary</item>
         <item name="colorSecondary">@color/accent_deep_purple_secondary</item>

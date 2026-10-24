@@ -46,6 +46,24 @@
             </intent-filter>
         </activity>
 
+        <!-- Open with: plays an audio file from another app without touching the queue -->
+        <activity
+            android:name=".ui.openwith.OpenWithActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:taskAffinity="com.oxoghost.hexaplayer.openwith"
+            android:launchMode="singleTask"
+            android:theme="@style/Theme.HexaPlayer.Translucent">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="content" />
+                <data android:scheme="file" />
+                <data android:mimeType="audio/*" />
+            </intent-filter>
+        </activity>
+
         <!-- Music service: MediaLibraryService for Auto + MediaSessionService for normal use -->
         <service
             android:name=".service.MusicService"
