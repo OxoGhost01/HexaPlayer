@@ -238,9 +238,7 @@ private fun LazyGridScope.folders(lib: LibraryState, playback: PlaybackState, ac
         SwipeToQueue(onSwipe = { actions.addToQueue(song) }, color = s.primary, modifier = Modifier.padding(bottom = 2.dp)) {
             MSegment(index, count, onClick = { actions.play(lib.folderSongs, i, "folder · ${lib.folderCrumbs.last()}") },
                 container = if (playback.song?.id == song.id) s.secondaryContainer else s.surfaceContainer) {
-                Box(Modifier.size(44.dp).clip(RoundedCornerShape(14.dp)).background(s.surfaceContainerHighest), contentAlignment = Alignment.Center) {
-                    Symbol(Symbols.MusicNote, null, tint = s.onSurfaceVariant)
-                }
+                CoverImage(song.artModel, song.albumKey, Modifier.size(44.dp), HexaShapes.coverList)
                 Column(Modifier.weight(1f)) {
                     Text(song.displayName.ifBlank { song.title }, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text(listOf(formatSize(song.size), formatDuration(song.duration)).filter { it.isNotEmpty() }.joinToString(" · "),
