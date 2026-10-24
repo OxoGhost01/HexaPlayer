@@ -15,8 +15,8 @@ android {
         applicationId = "com.oxoghost.hexaplayer"
         minSdk = 27
         targetSdk = 36
-        versionCode = 6
-        versionName = "1.5"
+        versionCode = 7
+        versionName = "2.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -35,7 +35,6 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     buildFeatures {
-        viewBinding = true
         buildConfig = true
         compose = true
     }
@@ -47,11 +46,6 @@ kotlin {
 
 dependencies {
     implementation(libs.androidx.core.ktx)
-    implementation(libs.androidx.appcompat)
-    implementation(libs.material)
-    implementation(libs.androidx.constraintlayout)
-    implementation(libs.androidx.recyclerview)
-    implementation(libs.androidx.fragment.ktx)
     implementation(libs.androidx.activity.ktx)
     implementation(libs.androidx.lifecycle.viewmodel.ktx)
     implementation(libs.androidx.lifecycle.livedata.ktx)
@@ -64,6 +58,7 @@ dependencies {
     implementation(libs.androidx.palette)
     implementation(libs.taglib)
     implementation(libs.androidx.room.runtime)
+    implementation(libs.androidx.glance.appwidget)
     implementation(libs.androidx.room.ktx)
     ksp(libs.androidx.room.compiler)
 
