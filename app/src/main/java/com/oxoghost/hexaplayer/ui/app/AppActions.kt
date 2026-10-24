@@ -15,6 +15,7 @@ import com.oxoghost.hexaplayer.ui.state.EditState
 import com.oxoghost.hexaplayer.ui.state.HexaActions
 import com.oxoghost.hexaplayer.ui.state.LibrarySection
 import com.oxoghost.hexaplayer.ui.state.SearchScope
+import com.oxoghost.hexaplayer.ui.state.SettingsPage
 import com.oxoghost.hexaplayer.ui.state.Sheet
 import com.oxoghost.hexaplayer.ui.state.SongAction
 import com.oxoghost.hexaplayer.ui.state.Tab
@@ -57,9 +58,18 @@ class AppActions(
         if (songs.isNotEmpty()) context.toast(context.getString(R.string.plays_next))
     }
 
+    override fun resumeRestored() = vm.resumeRestored()
+    override fun forgetRestored() = vm.forgetRestored()
+
     // Navigation
     override fun openTab(tab: Tab) {
-        nav.navigate(Routes.of(tab)) {
+        val route = Routes.of(tab)
+        // Already in this tab's stack (a screen opened from it): go back to the tab itself.
+        if (nav.currentBackStack.value.any { it.destination.route == route }) {
+            nav.popBackStack(route, inclusive = false)
+            return
+        }
+        nav.navigate(route) {
             popUpTo(nav.graph.findStartDestination().id) { saveState = true }
             launchSingleTop = true
             restoreState = true
@@ -75,6 +85,11 @@ class AppActions(
     override fun openAlbum(album: Album) = go(Routes.album(album.id))
     override fun openArtist(name: String) = go(Routes.artist(name))
     override fun openPlaylist(playlist: Playlist) = go(Routes.playlist(playlist.id))
+    override fun openSetup() = go(Routes.SETUP)
+    override fun openWrapped() = go(Routes.WRAPPED)
+    override fun openFlavorEditor(name: String?) = go(Routes.flavor(name))
+    override fun openAppearance() = go(Routes.APPEARANCE)
+    override fun openSettingsPage(page: SettingsPage) = go(Routes.settingsPage(page))
     override fun back() {
         nav.navigateUp()
     }
