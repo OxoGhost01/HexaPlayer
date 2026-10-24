@@ -123,13 +123,13 @@ private val tabKeys = listOf(TKey("1", "home"), TKey("2", "lib"), TKey("3", "fin
 private val selectionKeys = listOf(TKey("n", "next"), TKey("q", "queue"), TKey("p", "playlist"), TKey("e", "edit tags"))
 
 /**
- * Mini line and key bar under the current screen. Player, lyrics and the tag editor hide both,
+ * Mini line and key bar under the current screen. Player, lyrics, tag editor, setup and appearance hide both,
  * the queue keeps the keys, and multi-select swaps the keys for its actions.
  */
 @Composable
 fun TAppChrome(route: String?, playback: PlaybackState, actions: HexaActions) {
     val selection = LocalSelection.current
-    val fullScreen = route == Routes.PLAYER || route == Routes.LYRICS || route == Routes.EDIT
+    val fullScreen = route == Routes.PLAYER || route == Routes.LYRICS || route == Routes.EDIT || route == Routes.SETUP || route == Routes.APPEARANCE || route == Routes.WRAPPED || route == Routes.FLAVOR
     val song = playback.song
     Column(Modifier.fillMaxWidth()) {
         when {

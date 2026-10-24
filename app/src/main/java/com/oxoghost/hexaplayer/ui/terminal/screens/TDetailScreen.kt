@@ -36,6 +36,7 @@ import com.oxoghost.hexaplayer.ui.common.artModel
 import com.oxoghost.hexaplayer.ui.common.format
 import com.oxoghost.hexaplayer.ui.common.formatDay
 import com.oxoghost.hexaplayer.ui.common.formatLengthShort
+import com.oxoghost.hexaplayer.ui.common.plural
 import com.oxoghost.hexaplayer.ui.common.qualityLine
 import com.oxoghost.hexaplayer.ui.common.rememberReorderState
 import com.oxoghost.hexaplayer.ui.common.reorderHandle
@@ -47,6 +48,7 @@ import com.oxoghost.hexaplayer.ui.state.DetailState
 import com.oxoghost.hexaplayer.ui.state.HexaActions
 import com.oxoghost.hexaplayer.ui.state.PlaybackState
 import com.oxoghost.hexaplayer.ui.terminal.components.TButton
+import com.oxoghost.hexaplayer.ui.terminal.components.TCharBarRow
 import com.oxoghost.hexaplayer.ui.terminal.components.TDashedDivider
 import com.oxoghost.hexaplayer.ui.terminal.components.TDivider
 import com.oxoghost.hexaplayer.ui.terminal.components.THeader
@@ -94,6 +96,7 @@ private fun AlbumScreen(detail: DetailState, playback: PlaybackState, actions: H
                         )
                         TText(listOfNotNull(detail.year.takeIf { it > 0 }?.toString(), "${detail.songs.size} songs").joinToString(" · "),
                             Modifier.padding(top = 6.dp), color = c.dim)
+                        if (detail.totalPlays > 0) TText("played ${plural(detail.totalPlays, "time")}", color = c.dim)
                         val quality = info?.qualityLine() ?: first?.format.orEmpty()
                         TText(listOf(formatLengthShort(detail.durationMs), quality).filter { it.isNotEmpty() }.joinToString(" · "), color = c.dim)
                     }
@@ -146,6 +149,15 @@ private fun ArtistScreen(detail: DetailState, playback: PlaybackState, actions: 
             if (detail.albums.isNotEmpty()) {
                 item { SectionLabel("albums/") }
                 albumRows(detail.albums, actions, pixelCovers)
+            }
+            if (detail.mostPlayed.isNotEmpty()) {
+                item {
+                    SectionLabel("top songs")
+                    Column(Modifier.padding(horizontal = 12.dp)) {
+                        val max = detail.mostPlayed.first().second
+                        detail.mostPlayed.forEach { (song, plays) -> TCharBarRow(song.title, plays, max) }
+                    }
+                }
             }
             item { SectionLabel("songs") }
             itemsIndexed(detail.songs, key = { _, s -> s.id }) { i, song ->

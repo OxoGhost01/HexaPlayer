@@ -7,6 +7,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -36,6 +37,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import com.oxoghost.hexaplayer.ui.common.SwipeToQueue
 import com.oxoghost.hexaplayer.ui.common.formatDuration
+import com.oxoghost.hexaplayer.ui.common.plural
 import com.oxoghost.hexaplayer.ui.state.HexaActions
 import com.oxoghost.hexaplayer.ui.state.PlaybackState
 import com.oxoghost.hexaplayer.ui.state.SearchScope
@@ -59,7 +61,7 @@ fun TSearchScreen(search: SearchState, playback: PlaybackState, actions: HexaAct
             TStatusLine(
                 TMode.FIND,
                 if (search.active) "/${search.query}" else "type to search",
-                position = if (search.active) "${search.hits} hits" else null,
+                position = if (search.active) plural(search.hits, "hit") else null,
             )
         },
     ) {
@@ -73,7 +75,7 @@ fun TSearchScreen(search: SearchState, playback: PlaybackState, actions: HexaAct
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                 keyboardActions = KeyboardActions(onSearch = { actions.commitSearch() }),
                 trailing = if (search.active) {
-                    { TText("${search.hits} hits", color = c.dim) }
+                    { TText(plural(search.hits, "hit"), color = c.dim) }
                 } else null,
             )
         }
@@ -179,8 +181,37 @@ private fun LazyListScope.results(search: SearchState, playback: PlaybackState, 
             }
         }
     }
+    if (search.lyrics.isNotEmpty()) {
+        groupTitle("lyrics", search.lyrics.size)
+        items(search.lyrics, key = { "l${it.song.id}" }) { hit ->
+            val c = TerminalTheme.colors
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .combinedClickable(
+                        onClick = {
+                            actions.commitSearch()
+                            actions.play(search.lyrics.map { it.song }, search.lyrics.indexOf(hit), "search · $q")
+                        },
+                        onLongClick = { actions.songMenu(hit.song) },
+                    )
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+            ) {
+                TText(buildAnnotatedString {
+                    append(hit.song.title)
+                    withStyle(SpanStyle(color = c.dim)) { append(" ${hit.song.artist}") }
+                })
+                TText(highlight("\u201C${hit.line}\u201D", q, c.accent), color = c.dim, maxLines = 2)
+            }
+        }
+    }
     if (search.hits == 0) {
-        item { TText("no match for \"$q\"", Modifier.padding(12.dp), color = TerminalTheme.colors.dim) }
+        item {
+            TText(
+                if (search.scope == SearchScope.Lyrics) "no match in cached lyrics for \"$q\"" else "no match for \"$q\"",
+                Modifier.padding(12.dp), color = TerminalTheme.colors.dim,
+            )
+        }
     }
 }
 
