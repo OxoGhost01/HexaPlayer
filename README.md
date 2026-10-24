@@ -106,29 +106,6 @@ HexaPlayer plays the music already on your phone, fast and without distractions.
   <img src="img/widgets.png" width="60%" alt="Terminal and Material widgets" />
 </p>
 
-## Download & Sync (optional)
-- Paste a **Spotify link** (playlist, album or track) and the music lands in your library folder, named after the playlist or album
-- **Sync** keeps a playlist up to date: new songs are added, removed ones are deleted. Synced playlists can be re-synced in one tap
-- **Stop** any download, **run it again** later: songs already on your phone are skipped. Follow each song live while it downloads
-- Runs [spotDL](https://github.com/spotDL/spotify-downloader) inside **Termux**, on your phone. No account, no server, nothing leaves your device
-- HexaPlayer starts the downloader only when you need it, and it stops by itself when idle (or with the Stop button)
-- A step by step **setup guide** is built into the app. Details in the [Termux guide](termux/README.md)
-
-### Everywhere else
-- **Android Auto**: browse Songs, Albums, Artists, Playlists and Folders, with voice search
-- **Widgets**: 4×1 and 5×1 home screen widgets that follow your interface and colors, with a Resume button
-- **In-app updates**: get notified and install new versions directly
-
-## Screenshots
-
-<p align="center">
-  <img src="img/main-page.jpg" width="19%" alt="Library" />
-  <img src="img/big-player.jpg" width="19%" alt="Player" />
-  <img src="img/downloader.png" width="19%" alt="Download &amp; Sync" />
-  <img src="img/equalizer.jpg" width="19%" alt="Equalizer" />
-  <img src="img/settings.jpg" width="19%" alt="Settings" />
-</p>
-
 ## Download
 
 Grab the latest APK from the [Releases page](https://github.com/OxoGhost01/HexaPlayer/releases/latest) and install it. The app then updates itself.
