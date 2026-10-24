@@ -27,7 +27,15 @@ data class DetailState(
     val album: Album? = null,
     val playlist: Playlist? = null,
     val albums: List<Album> = emptyList(),
+    /** Plays per song of this page, from play history. */
+    val plays: Map<Long, Int> = emptyMap(),
 ) {
+    val totalPlays: Int get() = songs.sumOf { plays[it.id] ?: 0 }
+
+    /** The page's songs with at least one play, most played first. */
+    val mostPlayed: List<Pair<Song, Int>>
+        get() = songs.mapNotNull { s -> plays[s.id]?.takeIf { it > 0 }?.let { s to it } }.sortedByDescending { it.second }.take(5)
+
     val durationMs: Long get() = songs.sumOf { it.duration }
     val source: String get() = "$kind · $title"
     val year: Int get() = songs.maxOfOrNull { it.year } ?: 0
@@ -39,14 +47,16 @@ fun rememberDetailState(vm: MusicViewModel, key: DetailKey): DetailState? {
     val albums by vm.albums.observeAsState(emptyList())
     val artists by vm.artists.observeAsState(emptyList())
     val playlists by vm.playlists.observeAsState(emptyList())
+    val counts by vm.playCounts.observeAsState(emptyMap())
     return when (key) {
         is DetailKey.AlbumKey -> albums.firstOrNull { it.id == key.id }?.let {
-            DetailState(key, "album", it.title, it.artist, it.songs, album = it)
+            DetailState(key, "album", it.title, it.artist, it.songs, album = it, plays = counts)
         }
         is DetailKey.ArtistKey -> artists.firstOrNull { it.name == key.name }?.let {
             DetailState(
                 key, "artist", it.name, "${it.albums.size} albums · ${it.songs.size} songs", it.songs,
                 albums = it.albums.sortedWith(compareByDescending<Album> { a -> a.year }.thenBy { a -> a.title }),
+                plays = counts,
             )
         }
         is DetailKey.PlaylistKey -> playlists.firstOrNull { it.id == key.id }?.let { p ->

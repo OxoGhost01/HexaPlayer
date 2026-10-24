@@ -12,7 +12,7 @@ import org.json.JSONArray
 
 enum class LibrarySection { Songs, Albums, Artists, Playlists, Folders }
 
-enum class SearchScope { All, Songs, Albums, Artists }
+enum class SearchScope { All, Songs, Albums, Artists, Lyrics }
 
 /**
  * Sort orders. [terminal] and [material] are the labels each skin shows; the sort row cycles

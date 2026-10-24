@@ -48,3 +48,6 @@ fun formatDay(epochMs: Long, lower: Boolean = false): String {
 /** 00:12, the wall-clock time [epochMs] falls on. */
 fun formatClock(epochMs: Long): String =
     java.text.SimpleDateFormat("HH:mm", java.util.Locale.ROOT).format(java.util.Date(epochMs))
+
+/** "1 play", "3 plays". [many] defaults to the word plus s. */
+fun plural(count: Number, one: String, many: String = one + "s"): String = "$count ${if (count.toLong() == 1L) one else many}"

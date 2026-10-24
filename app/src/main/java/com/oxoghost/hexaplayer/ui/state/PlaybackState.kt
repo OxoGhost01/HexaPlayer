@@ -74,6 +74,8 @@ interface PlaybackActions {
     fun addToQueue(song: Song)
     fun addAllToQueue(songs: List<Song>)
     fun playNext(songs: List<Song>)
+    fun resumeRestored()
+    fun forgetRestored()
 }
 
 enum class Tab { Home, Library, Search, Download }
@@ -89,6 +91,12 @@ interface NavActions {
     fun openAlbum(album: Album)
     fun openArtist(name: String)
     fun openPlaylist(playlist: Playlist)
+    fun openSetup()
+    fun openAppearance()
+    fun openSettingsPage(page: SettingsPage)
+    fun openWrapped()
+    /** [name] of a custom flavor to edit, null for a new one based on the current flavor. */
+    fun openFlavorEditor(name: String?)
     fun back()
 }
 

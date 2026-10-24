@@ -32,6 +32,7 @@ class SystemAccess(private val activity: ComponentActivity, private val onAudioG
     private var pendingImage: ((Uri) -> Unit)? = null
     private var pendingFolder: ((String) -> Unit)? = null
     private var pendingWrite: ((Boolean) -> Unit)? = null
+    private var pendingPermission: ((Boolean) -> Unit)? = null
 
     private val audioLauncher = activity.registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
         refresh()
@@ -40,6 +41,12 @@ class SystemAccess(private val activity: ComponentActivity, private val onAudioG
 
     private val notificationLauncher = activity.registerForActivityResult(ActivityResultContracts.RequestPermission()) {
         hasNotifications = it
+    }
+
+    private val permissionLauncher = activity.registerForActivityResult(ActivityResultContracts.RequestPermission()) {
+        val callback = pendingPermission
+        pendingPermission = null
+        callback?.invoke(it)
     }
 
     private val imageLauncher = activity.registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -81,6 +88,12 @@ class SystemAccess(private val activity: ComponentActivity, private val onAudioG
 
     fun requestNotifications() {
         if (asksNotifications) notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+    }
+
+    /** Any other runtime permission, such as Termux's RUN_COMMAND. */
+    fun requestPermission(permission: String, onResult: (Boolean) -> Unit) {
+        pendingPermission = onResult
+        permissionLauncher.launch(permission)
     }
 
     fun pickImage(onPicked: (Uri) -> Unit) {

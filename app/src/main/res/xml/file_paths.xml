@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths>
-    <!-- App-specific external storage — used for APK update downloads (no permission needed) -->
+    <!-- App-specific external storage, used for APK update downloads (no permission needed) -->
     <external-files-path name="updates" path="." />
+    <!-- Images made to be shared (Wrapped export) -->
+    <cache-path name="shared" path="shared/" />
 </paths>

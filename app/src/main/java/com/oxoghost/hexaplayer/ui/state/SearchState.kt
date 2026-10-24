@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.livedata.observeAsState
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.AnnotatedString
@@ -14,7 +15,10 @@ import androidx.compose.ui.text.withStyle
 import com.oxoghost.hexaplayer.data.Album
 import com.oxoghost.hexaplayer.data.Artist
 import com.oxoghost.hexaplayer.data.Song
+import com.oxoghost.hexaplayer.data.db.HexaDatabase
 import com.oxoghost.hexaplayer.viewmodel.MusicViewModel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 @Immutable
 data class SearchState(
@@ -24,8 +28,9 @@ data class SearchState(
     val albums: List<Album>,
     val artists: List<Artist>,
     val history: List<String>,
+    val lyrics: List<LyricHit> = emptyList(),
 ) {
-    val hits: Int get() = songs.size + albums.size + artists.size
+    val hits: Int get() = songs.size + albums.size + artists.size + lyrics.size
     val active: Boolean get() = query.isNotBlank()
 }
 
@@ -47,8 +52,24 @@ fun rememberSearchState(vm: MusicViewModel, ui: UiModel): SearchState {
                 artists.filter { it.name.contains(q, true) }.take(30) else emptyList(),
         )
     }
-    return SearchState(ui.searchQuery, scope, results.first, results.second, results.third, ui.searchHistory.toList())
+    // Only lyrics already fetched once are searchable (they live in the local cache).
+    val lyrics by produceState(emptyList<LyricHit>(), q, scope, songs) {
+        value = if (q.length < 3 || (scope != SearchScope.All && scope != SearchScope.Lyrics)) emptyList()
+        else withContext(Dispatchers.IO) {
+            val byId = songs.associateBy { it.id }
+            HexaDatabase.get(vm.getApplication()).lyrics().search(q, 30).mapNotNull { c ->
+                val song = byId[c.songId] ?: return@mapNotNull null
+                val line = c.text.lineSequence().firstOrNull { it.contains(q, ignoreCase = true) } ?: return@mapNotNull null
+                LyricHit(song, line.trim())
+            }
+        }
+    }
+    return SearchState(ui.searchQuery, scope, results.first, results.second, results.third, ui.searchHistory.toList(), lyrics)
 }
+
+/** A song whose cached lyrics contain the query, with the matching line. */
+@Immutable
+data class LyricHit(val song: Song, val line: String)
 
 /** [text] with the first case-insensitive match of [query] colored (and underlined when asked). */
 fun highlight(text: String, query: String, color: Color, underline: Boolean = true): AnnotatedString {
