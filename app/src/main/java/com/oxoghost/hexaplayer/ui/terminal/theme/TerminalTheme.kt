@@ -27,8 +27,13 @@ object TerminalTheme {
 }
 
 @Composable
-fun TerminalTheme(palette: String, pureBlack: Boolean, content: @Composable () -> Unit) {
-    val colors = TerminalPalettes.get(palette, pureBlack)
+fun TerminalTheme(
+    palette: String,
+    pureBlack: Boolean,
+    custom: Map<String, TerminalColors> = emptyMap(),
+    content: @Composable () -> Unit,
+) {
+    val colors = TerminalPalettes.get(palette, pureBlack, custom)
     val indication = remember(colors.selection) { SelectionIndication(colors.selection) }
     CompositionLocalProvider(
         LocalTerminalColors provides colors,

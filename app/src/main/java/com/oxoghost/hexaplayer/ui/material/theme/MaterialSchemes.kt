@@ -22,6 +22,9 @@ object MaterialSchemes {
 
     const val GRAPHITE = "Graphite"
 
+    /** The palette swatch that stands for the album-art color source. */
+    const val ALBUM_ART = "Album art"
+
     /** The spec version that reproduces the precomputed schemes in tokens.json. */
     internal val SPEC = ColorSpec.SpecVersion.SPEC_2021
 

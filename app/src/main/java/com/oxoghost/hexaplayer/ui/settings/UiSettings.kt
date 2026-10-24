@@ -1,5 +1,6 @@
 package com.oxoghost.hexaplayer.ui.settings
 
+import com.oxoghost.hexaplayer.ui.tokens.TerminalPaletteTokens
 import com.oxoghost.hexaplayer.ui.tokens.DesignTokens
 
 enum class Skin { Terminal, Material }
@@ -14,4 +15,6 @@ data class UiSettings(
     val pureBlack: Boolean = false,
     val tintPlayerWithCover: Boolean = true,
     val pixelCovers: Boolean = true,
+    /** Terminal flavors made in the flavor editor, by name. */
+    val customFlavors: Map<String, TerminalPaletteTokens> = emptyMap(),
 )

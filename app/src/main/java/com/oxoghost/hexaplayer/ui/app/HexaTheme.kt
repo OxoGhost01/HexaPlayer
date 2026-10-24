@@ -18,7 +18,7 @@ import com.oxoghost.hexaplayer.ui.terminal.theme.TerminalTheme
 @Composable
 fun HexaTheme(settings: UiSettings, albumSeed: Color? = null, content: @Composable () -> Unit) {
     HexaMaterialTheme(settings, albumSeed) {
-        TerminalTheme(settings.terminalPalette, settings.pureBlack) {
+        TerminalTheme(settings.terminalPalette, settings.pureBlack, settings.customFlavors) {
             // Material components use ripple; the terminal theme replaced the indication.
             val indication = if (settings.skin == Skin.Material) ripple() else LocalIndication.current
             CompositionLocalProvider(LocalIndication provides indication, content = content)

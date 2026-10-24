@@ -11,8 +11,8 @@ typealias TerminalColors = TerminalPaletteTokens
 object TerminalPalettes {
     val names: List<String> get() = DesignTokens.Terminal.palettes.keys.toList()
 
-    fun get(name: String, pureBlack: Boolean): TerminalColors {
-        val base = DesignTokens.Terminal.palettes[name]
+    fun get(name: String, pureBlack: Boolean, custom: Map<String, TerminalColors> = emptyMap()): TerminalColors {
+        val base = custom[name] ?: DesignTokens.Terminal.palettes[name]
             ?: DesignTokens.Terminal.palettes.getValue(DesignTokens.Terminal.DEFAULT_PALETTE)
         return if (pureBlack) base.copy(background = Color.Black) else base
     }
