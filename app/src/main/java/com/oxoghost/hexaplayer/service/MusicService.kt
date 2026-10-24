@@ -8,11 +8,14 @@ import android.content.IntentFilter
 import android.media.AudioManager
 import android.net.Uri
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
+import androidx.media3.common.Timeline
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.CommandButton
@@ -27,10 +30,14 @@ import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.SettableFuture
 import com.oxoghost.hexaplayer.R
+import com.oxoghost.hexaplayer.data.db.HexaDatabase
+import com.oxoghost.hexaplayer.repository.EqualizerRepository
 import com.oxoghost.hexaplayer.repository.MusicRepository
 import com.oxoghost.hexaplayer.repository.PlaylistRepository
+import com.oxoghost.hexaplayer.repository.QueueStore
 import com.oxoghost.hexaplayer.widget.WidgetController
 import java.util.concurrent.Executors
+import kotlinx.coroutines.runBlocking
 
 @UnstableApi
 class MusicService : MediaLibraryService() {
@@ -68,6 +75,8 @@ class MusicService : MediaLibraryService() {
         const val EXTRA_SHUFFLE_ON     = "hexa.shuffle_on"
         const val EXTRA_QUEUE_REORDERED = "hexa.queue_reordered"
         const val EXTRA_FORCE_ON       = "hexa.force_on"
+
+        private const val POSITION_SAVE_MS = 10_000L
     }
 
     // ── Noisy receiver ────────────────────────────────────────────────────────
@@ -81,10 +90,58 @@ class MusicService : MediaLibraryService() {
 
     // ── Player listener → keep widgets in sync + update AA custom layout ─────
     private val playerListener = object : Player.Listener {
-        override fun onIsPlayingChanged(isPlaying: Boolean) = pushWidgetState()
-        override fun onMediaItemTransition(item: MediaItem?, reason: Int) = pushWidgetState()
-        override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) = updateCustomLayout()
-        override fun onRepeatModeChanged(repeatMode: Int) = updateCustomLayout()
+        override fun onIsPlayingChanged(isPlaying: Boolean) {
+            pushWidgetState()
+            mediaLibrarySession?.player?.let { tracker.onIsPlayingChanged(it, isPlaying) }
+            saveQueueSoon()
+        }
+
+        override fun onMediaItemTransition(item: MediaItem?, reason: Int) {
+            pushWidgetState()
+            mediaLibrarySession?.player?.let { tracker.onTransition(it, item, reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO) }
+            saveQueueSoon()
+        }
+
+        override fun onPlaybackStateChanged(state: Int) {
+            val player = mediaLibrarySession?.player ?: return
+            if (state == Player.STATE_READY) tracker.onReady(player)
+            if (state == Player.STATE_ENDED) tracker.onEnded()
+        }
+
+        override fun onTimelineChanged(timeline: Timeline, reason: Int) = saveQueueSoon()
+
+        override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) {
+            updateCustomLayout()
+            saveQueueSoon()
+        }
+
+        override fun onRepeatModeChanged(repeatMode: Int) {
+            updateCustomLayout()
+            saveQueueSoon()
+        }
+
+        // ExoPlayer only gets its session once audio starts; effects must attach to that one.
+        override fun onAudioSessionIdChanged(id: Int) {
+            audioSessionId = id
+            EqualizerRepository.getInstance(this@MusicService).initEffects(id)
+        }
+    }
+
+    // ── Remember queue + play history ─────────────────────────────────────────
+    private val queueStore by lazy { QueueStore(this) }
+    private val history by lazy { HexaDatabase.get(this).plays() }
+    private val tracker = PlayTracker { event -> ioExecutor.execute { runBlocking { history.insert(event) } } }
+    private val saveHandler = Handler(Looper.getMainLooper())
+    private val saveQueue = Runnable {
+        mediaLibrarySession?.player?.let { queueStore.save(it, shuffleOn) }
+        // Keep the position fresh while playing.
+        if (mediaLibrarySession?.player?.isPlaying == true) saveQueueSoon(POSITION_SAVE_MS)
+    }
+
+    /** Debounced: many changes in a row (a new queue, a reorder) give one write. */
+    private fun saveQueueSoon(delayMs: Long = 1_000) {
+        saveHandler.removeCallbacks(saveQueue)
+        saveHandler.postDelayed(saveQueue, delayMs)
     }
 
     private fun pushWidgetState() {
@@ -155,6 +212,9 @@ class MusicService : MediaLibraryService() {
 
     override fun onDestroy() {
         unregisterReceiver(noisyReceiver)
+        saveHandler.removeCallbacks(saveQueue)
+        mediaLibrarySession?.player?.let { queueStore.save(it, shuffleOn) }
+        tracker.flush()
         mediaLibrarySession?.run {
             player.removeListener(playerListener)
             player.release()

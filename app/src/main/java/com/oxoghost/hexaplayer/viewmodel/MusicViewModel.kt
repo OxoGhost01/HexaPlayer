@@ -2,9 +2,9 @@ package com.oxoghost.hexaplayer.viewmodel
 
 import android.app.Application
 import android.content.ComponentName
+import android.content.ContentUris
 import android.content.Context
 import android.media.MediaScannerConnection
-import android.content.ContentUris
 import android.net.Uri
 import android.os.Bundle
 import android.os.Environment
@@ -20,25 +20,31 @@ import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionToken
+import com.google.common.util.concurrent.MoreExecutors
 import com.oxoghost.hexaplayer.data.Album
 import com.oxoghost.hexaplayer.data.Artist
 import com.oxoghost.hexaplayer.data.LyricsState
 import com.oxoghost.hexaplayer.data.Playlist
 import com.oxoghost.hexaplayer.data.Song
+import com.oxoghost.hexaplayer.data.db.CachedLyrics
+import com.oxoghost.hexaplayer.data.db.HexaDatabase
+import com.oxoghost.hexaplayer.repository.CoverChange
 import com.oxoghost.hexaplayer.repository.CoverRepository
+import com.oxoghost.hexaplayer.repository.HistoryRepository
 import com.oxoghost.hexaplayer.repository.LyricsRepository
 import com.oxoghost.hexaplayer.repository.MusicRepository
+import com.oxoghost.hexaplayer.repository.Period
 import com.oxoghost.hexaplayer.repository.PlaylistRepository
-import com.oxoghost.hexaplayer.repository.CoverChange
+import com.oxoghost.hexaplayer.repository.QueueStore
+import com.oxoghost.hexaplayer.repository.SavedQueue
 import com.oxoghost.hexaplayer.repository.TagField
 import com.oxoghost.hexaplayer.repository.TagRepository
 import com.oxoghost.hexaplayer.service.MusicService
-import com.google.common.util.concurrent.MoreExecutors
+import kotlin.coroutines.resume
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
-import kotlin.coroutines.resume
 
 class MusicViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -121,6 +127,21 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     val queueSource: LiveData<String?> = _queueSource
 
     /** Lyrics offset of the current song in ms (positive = lyrics later). */
+    /** The queue restored at start, until it plays or is forgotten (Home's Resume card). */
+    private val _restored = MutableLiveData<SavedQueue?>(null)
+    val restored: LiveData<SavedQueue?> = _restored
+
+    /** Bumped when a track changes, so play history views reload. */
+    private val _historyVersion = MutableLiveData(0)
+    val historyVersion: LiveData<Int> = _historyVersion
+
+    private val _playCounts = MutableLiveData<Map<Long, Int>>(emptyMap())
+    val playCounts: LiveData<Map<Long, Int>> = _playCounts
+
+    val queueStore = QueueStore(application)
+    val history = HistoryRepository(application)
+    private var rebuildAfterLoad = false
+
     private val _lyricsOffsetMs = MutableLiveData(0L)
     val lyricsOffsetMs: LiveData<Long> = _lyricsOffsetMs
 
@@ -177,6 +198,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     private val playerListener = object : Player.Listener {
         override fun onIsPlayingChanged(isPlaying: Boolean) {
             _isPlaying.postValue(isPlaying)
+            if (isPlaying) _restored.postValue(null)
             if (isPlaying) handler.post(positionRunnable)
             else handler.removeCallbacks(positionRunnable)
         }
@@ -192,6 +214,8 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
             }
 
             syncCurrentSong()
+            // The service records the play a moment later; reload after it did.
+            handler.postDelayed({ refreshHistory() }, 1_500)
         }
 
         override fun onRepeatModeChanged(repeatMode: Int) {
@@ -224,6 +248,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
             try {
                 controller = future.get()
                 controller?.addListener(playerListener)
+                restoreQueue()
                 syncCurrentSong()
             } catch (_: Exception) { }
         }, MoreExecutors.directExecutor())
@@ -285,9 +310,80 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
             _albums.postValue(musicRepository.groupByAlbums(songList))
             _artists.postValue(musicRepository.groupByArtists(songList))
             _isLoading.postValue(false)
-            handler.post { syncCurrentSong() }
+            handler.post {
+                if (rebuildAfterLoad) {
+                    rebuildAfterLoad = false
+                    rebuildQueueFromPlayer()
+                }
+                syncCurrentSong()
+            }
         }
         refreshPlaylists()
+        refreshHistory()
+    }
+
+    fun refreshHistory() {
+        viewModelScope.launch {
+            _playCounts.value = withContext(Dispatchers.IO) { history.playCounts() }
+            _historyVersion.value = (_historyVersion.value ?: 0) + 1
+        }
+    }
+
+    /** Puts the remembered queue back in the player, paused, when nothing is loaded yet. */
+    private fun restoreQueue() {
+        val ctrl = controller ?: return
+        if (ctrl.mediaItemCount > 0) return
+        val saved = queueStore.load() ?: return
+        ctrl.setMediaItems(saved.items.map { it.toMediaItem() }, saved.index, saved.positionMs)
+        ctrl.repeatMode = saved.repeat
+        ctrl.prepare()
+        _queueSource.value = saved.source
+        _restored.value = saved
+        // The position is only polled while playing, so show the restored one now.
+        _currentPosition.value = saved.positionMs
+        if (saved.shuffle) {
+            controller?.sendCustomCommand(
+                SessionCommand(MusicService.CMD_SHUFFLE, Bundle.EMPTY),
+                Bundle().apply { putBoolean(MusicService.EXTRA_FORCE_ON, true) }
+            )
+        }
+        if (_songs.value.isNullOrEmpty()) rebuildAfterLoad = true else rebuildQueueFromPlayer()
+    }
+
+    /** Wrapped: makes a playlist of the 50 most played songs of [period]. [onDone] gets its name and size. */
+    fun saveTopSongs(period: Period, onDone: (String, Int) -> Unit) {
+        viewModelScope.launch {
+            val top = withContext(Dispatchers.IO) { history.wrapped(period, topSongs = 50).topSongs }
+            val inLibrary = _songs.value.orEmpty().map { it.id }.toSet()
+            val ids = top.map { it.songId }.filter { it in inLibrary }
+            if (ids.isEmpty()) return@launch
+            val name = "Top ${ids.size} · ${period.label}"
+            val playlist = createPlaylist(name)
+            addSongsToPlaylist(playlist.id, ids)
+            onDone(name, ids.size)
+        }
+    }
+
+    /** Resume card: play the restored queue. */
+    fun resumeRestored() {
+        controller?.play()
+        _restored.value = null
+    }
+
+    /** Resume card: drop the restored queue. */
+    fun forgetRestored() {
+        controller?.run {
+            stop()
+            clearMediaItems()
+        }
+        queueStore.clear()
+        contextQueue = emptyList()
+        uqEntries.clear()
+        _contextQueueLive.value = emptyList()
+        _userQueueLive.value = emptyList()
+        _currentSong.value = null
+        _queueSource.value = null
+        _restored.value = null
     }
 
     private suspend fun scanDirectories(paths: Array<String>) =
@@ -305,6 +401,8 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     fun playQueue(songs: List<Song>, startIndex: Int = 0, source: String? = null) {
         val ctrl = controller ?: return
         _queueSource.value = source
+        queueStore.source = source
+        _restored.value = null
         contextQueue = songs
         contextCurrentIndex = startIndex
         uqEntries.clear()
@@ -622,7 +720,11 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         if (cached != null) { _lyricsState.postValue(cached); return }
         _lyricsState.postValue(LyricsState.Loading)
         viewModelScope.launch {
-            val result = lyricsRepository.fetchLyrics(song)
+            val dao = HexaDatabase.get(getApplication()).lyrics()
+            val stored = withContext(Dispatchers.IO) { dao.get(song.id) }
+            val result = stored?.toState() ?: lyricsRepository.fetchLyrics(song).also { fetched ->
+                if (fetched is LyricsState.Found) withContext(Dispatchers.IO) { dao.put(fetched.toCache(song)) }
+            }
             lyricsCache[song.id] = result
             _lyricsState.postValue(result)
         }
@@ -722,3 +824,18 @@ private fun Song.toUqMediaItem(uid: String): MediaItem =
                 .build()
         )
         .build()
+
+private fun CachedLyrics.toState(): LyricsState.Found {
+    val times = timestamps.split(',').mapNotNull { it.trim().toLongOrNull() }
+    return LyricsState.Found(text.split('\n'), times.ifEmpty { null }, times.isNotEmpty())
+}
+
+private fun LyricsState.Found.toCache(song: Song) = CachedLyrics(
+    songId = song.id,
+    title = song.title,
+    artist = song.artist,
+    text = lines.joinToString("\n"),
+    timestamps = timestamps?.joinToString(",").orEmpty(),
+    fetchedAt = System.currentTimeMillis(),
+)
+
