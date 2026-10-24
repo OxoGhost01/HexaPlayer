@@ -4,7 +4,14 @@ import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 
-data class UpdateInfo(val latestVersion: String, val downloadUrl: String, val changelog: String = "")
+data class UpdateInfo(
+    val latestVersion: String,
+    val downloadUrl: String,
+    val changelog: String = "",
+    val sizeBytes: Long = 0L,
+    /** ISO 8601 release date, empty when unknown. */
+    val publishedAt: String = "",
+)
 
 class UpdateRepository {
 
@@ -53,16 +60,18 @@ class UpdateRepository {
 
             // Prefer a direct APK asset download URL; fall back to the release page
             val assets = obj.optJSONArray("assets")
-            val apkUrl = if (assets != null) {
-                (0 until assets.length()).mapNotNull { i ->
-                    val asset = assets.getJSONObject(i)
-                    if (asset.getString("name").endsWith(".apk")) {
-                        asset.getString("browser_download_url")
-                    } else null
-                }.firstOrNull()
+            val apk = if (assets != null) {
+                (0 until assets.length()).map { assets.getJSONObject(it) }
+                    .firstOrNull { it.getString("name").endsWith(".apk") }
             } else null
 
-            UpdateInfo(tagName, apkUrl ?: htmlUrl, changelog)
+            UpdateInfo(
+                latestVersion = tagName,
+                downloadUrl = apk?.getString("browser_download_url") ?: htmlUrl,
+                changelog = changelog,
+                sizeBytes = apk?.optLong("size", 0L) ?: 0L,
+                publishedAt = obj.optString("published_at", ""),
+            )
         } catch (_: Exception) {
             null
         }
