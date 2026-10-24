@@ -18,14 +18,17 @@ data class ServerJob(
     val message: String,
     val error: String?,
     val folders: List<String>,
-    val files: List<String>
+    val files: List<String>,
+    val failed: Int = 0,
+    val log: List<String> = emptyList(),
 )
 
 /** Result of `GET /health`. */
 data class ServerHealth(
     val version: String,
     val serverVersion: Int,
-    val root: String
+    val root: String,
+    val idleMinutes: Int = 0,
 )
 
 /** HTTP client for the HexaDL server, which always runs in Termux on this phone. */
@@ -38,7 +41,8 @@ class DownloadRepository {
         ServerHealth(
             version = obj.optString("spotdl", "?"),
             serverVersion = obj.optInt("server", 0),
-            root = obj.optString("root", "")
+            root = obj.optString("root", ""),
+            idleMinutes = obj.optDouble("idle_minutes", 0.0).toInt(),
         )
     }
 
@@ -67,6 +71,8 @@ class DownloadRepository {
             val folders = (0 until foldersArr.length()).map { foldersArr.getString(it) }
             val filesArr = obj.optJSONArray("files") ?: JSONArray()
             val files = (0 until filesArr.length()).map { filesArr.getString(it) }
+            val logArr = obj.optJSONArray("log") ?: JSONArray()
+            val log = (0 until logArr.length()).map { logArr.getString(it) }
             ServerJob(
                 status = obj.optString("status", "running"),
                 done = obj.optInt("done", 0),
@@ -74,12 +80,19 @@ class DownloadRepository {
                 message = obj.optString("message", ""),
                 error = obj.optString("error", "").ifBlank { null },
                 folders = folders,
-                files = files
+                files = files,
+                failed = obj.optInt("failed", 0),
+                log = log,
             )
         }
 
     suspend fun stopJob(jobId: String) {
         withContext(Dispatchers.IO) { httpPost("/jobs/$jobId/stop", "{}") }
+    }
+
+    /** Asks the server to stop its jobs and exit (server version 3 and up). */
+    suspend fun shutdown() {
+        withContext(Dispatchers.IO) { httpPost("/shutdown", "{}") }
     }
 
     suspend fun listSyncs(): List<SyncEntry> =

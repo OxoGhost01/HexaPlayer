@@ -44,6 +44,10 @@ class DownloadViewModel(application: Application) : AndroidViewModel(application
     private val _connected = MutableLiveData<Boolean>(false)
     val connected: LiveData<Boolean> = _connected
 
+    /** Last health answer while connected (spotDL version, idle timeout), null otherwise. */
+    private val _health = MutableLiveData<ServerHealth?>(null)
+    val health: LiveData<ServerHealth?> = _health
+
     /** True when the running server is older than this app needs. */
     private val _serverOutdated = MutableLiveData(false)
     val serverOutdated: LiveData<Boolean> = _serverOutdated
@@ -82,6 +86,10 @@ class DownloadViewModel(application: Application) : AndroidViewModel(application
         get() = prefs.getBoolean("use_custom_folder", false)
         set(v) = prefs.edit().putBoolean("use_custom_folder", v).apply()
 
+    /** The server answered at least once (or synced a playlist), so the setup command has been run. */
+    val serverSeen: Boolean
+        get() = prefs.getBoolean("server_seen", false) || !_syncs.value.isNullOrEmpty()
+
     // --- Connection -------------------------------------------------------- //
 
     /** Called when the Download tab becomes visible. Only checks, never starts the server. */
@@ -115,6 +123,25 @@ class DownloadViewModel(application: Application) : AndroidViewModel(application
     fun startServer() {
         connectJob?.cancel()
         connectJob = viewModelScope.launch { launchServerAndWait() }
+    }
+
+    /** Stops the running jobs and the server (needs server version 3, from the current setup command). */
+    fun stopServer() {
+        val health = _health.value ?: return
+        if (health.serverVersion < MIN_SERVER_VERSION) {
+            _toastMessage.value = "Run the setup command again in Termux to get the stop button"
+            return
+        }
+        connectJob?.cancel()
+        viewModelScope.launch {
+            try {
+                repo.shutdown()
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+            }
+            setConnected(false)
+            _connectionStatus.value = "Stopped. It starts by itself when you download."
+        }
     }
 
     /** Makes sure the server answers before a job, starting it through Termux if needed. */
@@ -157,6 +184,8 @@ class DownloadViewModel(application: Application) : AndroidViewModel(application
 
     private fun onConnected(health: ServerHealth) {
         setConnected(true)
+        _health.value = health
+        if (!serverSeen) prefs.edit().putBoolean("server_seen", true).apply()
         _serverOutdated.value = health.serverVersion < MIN_SERVER_VERSION
         _connectionStatus.value = "Connected · spotDL ${health.version}"
         refreshSyncs()
@@ -164,6 +193,7 @@ class DownloadViewModel(application: Application) : AndroidViewModel(application
 
     private fun setConnected(ok: Boolean) {
         _connected.value = ok
+        if (!ok) _health.value = null
         _checkResult.value = ok
     }
 
@@ -275,6 +305,8 @@ class DownloadViewModel(application: Application) : AndroidViewModel(application
                     current = current.copy(
                         serverDone = s.done,
                         serverTotal = s.total,
+                        serverFailed = s.failed,
+                        log = s.log,
                         message = if (job.id in stopping && s.status == "running") "Stopping…" else s.message
                     )
                     upsert(current)
@@ -344,6 +376,6 @@ class DownloadViewModel(application: Application) : AndroidViewModel(application
 
     companion object {
         private const val TAG = "DownloadViewModel"
-        private const val MIN_SERVER_VERSION = 2
+        private const val MIN_SERVER_VERSION = 3
     }
 }

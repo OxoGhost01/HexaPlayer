@@ -17,7 +17,10 @@ data class SpotdlJob(
     val serverDone: Int = 0,
     val serverTotal: Int = 0,
     val message: String = "",
-    val error: String? = null
+    val error: String? = null,
+    val serverFailed: Int = 0,
+    /** Last lines spotDL printed, for the live per-track log. */
+    val log: List<String> = emptyList(),
 )
 
 enum class JobKind { DOWNLOAD, SYNC }
