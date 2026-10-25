@@ -1,5 +1,10 @@
 package com.oxoghost.hexaplayer.ui.material.components
 
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -13,6 +18,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -50,6 +56,35 @@ fun MLinearProgress(
         val trackEnd = size.width - h - gap
         if (trackEnd > trackStart) drawRoundRect(track, Offset(trackStart, 0f), Size(trackEnd - trackStart, h), r)
         drawCircle(color, h / 2, Offset(size.width - h / 2, h / 2))
+    }
+}
+
+/** Indeterminate [MLinearProgress]: a segment sliding over the track, with gaps on both sides. */
+@Composable
+fun MLinearProgressIndeterminate(
+    modifier: Modifier = Modifier,
+    thickness: Dp = 4.dp,
+    color: Color = MaterialTheme.colorScheme.primary,
+    track: Color = MaterialTheme.colorScheme.secondaryContainer,
+) {
+    val t by rememberInfiniteTransition(label = "progress").animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(1400, easing = FastOutSlowInEasing)),
+        label = "slide",
+    )
+    Canvas(modifier.fillMaxWidth().height(thickness).semantics { progressBarRangeInfo = ProgressBarRangeInfo.Indeterminate }) {
+        val h = size.height
+        val r = CornerRadius(h / 2)
+        val gap = 4.dp.toPx()
+        val segment = size.width * 0.3f
+        val start = -segment + (size.width + segment) * t
+        val end = start + segment
+        val a = start.coerceAtLeast(0f)
+        val b = end.coerceAtMost(size.width)
+        if (a - gap > 0) drawRoundRect(track, Offset.Zero, Size(a - gap, h), r)
+        if (b > a) drawRoundRect(color, Offset(a, 0f), Size(b - a, h), r)
+        if (size.width - b - gap > 0) drawRoundRect(track, Offset(b + gap, 0f), Size(size.width - b - gap, h), r)
     }
 }
 

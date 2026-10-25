@@ -36,6 +36,8 @@ data class JobLogLine(val kind: LogKind, val text: String)
 data class JobView(
     val job: SpotdlJob,
     val running: Boolean,
+    /** spotDL is still looking the songs up on YouTube, nothing finished yet. */
+    val matching: Boolean,
     val failed: Boolean,
     val fraction: Float,
     val counter: String,
@@ -132,7 +134,8 @@ private fun jobView(job: SpotdlJob): JobView {
     return JobView(
         job = job,
         running = running,
-        failed = job.phase == JobPhase.ERROR || job.phase == JobPhase.STOPPED,
+        matching = job.phase == JobPhase.SERVER && job.serverDone == 0 && job.serverFailed == 0,
+        failed =job.phase == JobPhase.ERROR || job.phase == JobPhase.STOPPED,
         fraction = if (total > 0) job.serverDone.toFloat() / total else 0f,
         counter = counter,
         detail = detail,

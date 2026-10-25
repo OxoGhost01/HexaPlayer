@@ -1,5 +1,11 @@
 package com.oxoghost.hexaplayer.ui.terminal.components
 
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -113,4 +119,53 @@ fun TBlockBar(
             overflow = androidx.compose.ui.text.style.TextOverflow.Clip,
         )
     }
+}
+
+/** `░░███░░░░░` with the block bouncing back and forth, for work with no known progress. */
+@Composable
+fun TBlockBarIndeterminate(
+    modifier: Modifier = Modifier,
+    color: Color = TerminalTheme.colors.accent,
+    track: Color = TerminalTheme.colors.border,
+    style: TextStyle = TerminalTheme.type.body,
+) {
+    val cell = rememberCellWidth(style)
+    val t by rememberInfiniteTransition(label = "bounce").animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(1600, easing = LinearEasing), RepeatMode.Reverse),
+        label = "block",
+    )
+    BoxWithConstraints(modifier.fillMaxWidth()) {
+        val cells = (maxWidth / cell).toInt().coerceAtLeast(1)
+        val block = (cells / 5).coerceIn(1, cells)
+        val start = ((cells - block) * t).roundToInt()
+        TText(
+            text = androidx.compose.ui.text.buildAnnotatedString {
+                pushStyle(androidx.compose.ui.text.SpanStyle(color = track))
+                append("░".repeat(start))
+                pop()
+                pushStyle(androidx.compose.ui.text.SpanStyle(color = color))
+                append("█".repeat(block))
+                pop()
+                pushStyle(androidx.compose.ui.text.SpanStyle(color = track))
+                append("░".repeat(cells - start - block))
+                pop()
+            },
+            style = style,
+            overflow = androidx.compose.ui.text.style.TextOverflow.Clip,
+        )
+    }
+}
+
+/** `|/-\` spinner, one character wide. */
+@Composable
+fun TSpinner(modifier: Modifier = Modifier, color: Color = TerminalTheme.colors.accent) {
+    val frame by rememberInfiniteTransition(label = "spinner").animateFloat(
+        initialValue = 0f,
+        targetValue = 4f,
+        animationSpec = infiniteRepeatable(tween(600, easing = LinearEasing)),
+        label = "frame",
+    )
+    TText("|/-\\"[frame.toInt().coerceIn(0, 3)].toString(), modifier, color = color)
 }

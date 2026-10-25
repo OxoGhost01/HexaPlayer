@@ -39,6 +39,7 @@ import com.oxoghost.hexaplayer.ui.material.components.MButtonStyle
 import com.oxoghost.hexaplayer.ui.material.components.MCircleButton
 import com.oxoghost.hexaplayer.ui.material.components.MIconButton
 import com.oxoghost.hexaplayer.ui.material.components.MLinearProgress
+import com.oxoghost.hexaplayer.ui.material.components.MLinearProgressIndeterminate
 import com.oxoghost.hexaplayer.ui.material.components.MPillButton
 import com.oxoghost.hexaplayer.ui.material.components.MSectionLabel
 import com.oxoghost.hexaplayer.ui.material.components.MSegment
@@ -182,12 +183,15 @@ private fun JobSegment(index: Int, count: Int, job: JobView, actions: DownloadAc
         }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(job.job.label, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            val line = if (job.running) {
+            val line = if (job.matching) {
+                "${job.kind.replaceFirstChar { it.uppercase() }} · Matching songs on YouTube, the first ones can take a few minutes"
+            } else if (job.running) {
                 listOf(job.kind.replaceFirstChar { it.uppercase() }, job.counter.replace("/", " of "), job.log.lastOrNull()?.text ?: job.detail)
                     .filter { it.isNotEmpty() }.joinToString(" · ")
             } else job.detail
             Text(line, color = s.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            if (job.running) MLinearProgress(job.fraction, Modifier.fillMaxWidth().padding(top = 6.dp))
+            if (job.matching) MLinearProgressIndeterminate(Modifier.fillMaxWidth().padding(top = 6.dp))
+            else if (job.running) MLinearProgress(job.fraction, Modifier.fillMaxWidth().padding(top = 6.dp))
         }
         if (job.running) {
             MCircleButton(Symbols.Stop, "Stop ${job.job.label}", { actions.stopJob(job.job) }, container = s.surfaceContainerHigh, content = s.onSurface, size = 48.dp)

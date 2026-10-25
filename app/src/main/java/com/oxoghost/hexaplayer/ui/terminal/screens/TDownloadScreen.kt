@@ -39,12 +39,14 @@ import com.oxoghost.hexaplayer.ui.state.DownloaderStatus
 import com.oxoghost.hexaplayer.ui.state.JobView
 import com.oxoghost.hexaplayer.ui.state.LogKind
 import com.oxoghost.hexaplayer.ui.terminal.components.TBlockBar
+import com.oxoghost.hexaplayer.ui.terminal.components.TBlockBarIndeterminate
 import com.oxoghost.hexaplayer.ui.terminal.components.TButton
 import com.oxoghost.hexaplayer.ui.terminal.components.TCheckMark
 import com.oxoghost.hexaplayer.ui.terminal.components.TDashedDivider
 import com.oxoghost.hexaplayer.ui.terminal.components.THeader
 import com.oxoghost.hexaplayer.ui.terminal.components.TInput
 import com.oxoghost.hexaplayer.ui.terminal.components.TMode
+import com.oxoghost.hexaplayer.ui.terminal.components.TSpinner
 import com.oxoghost.hexaplayer.ui.terminal.components.TStatusLine
 import com.oxoghost.hexaplayer.ui.terminal.components.TText
 import com.oxoghost.hexaplayer.ui.terminal.theme.TerminalTheme
@@ -182,7 +184,7 @@ private fun RunningJob(job: JobView, actions: DownloadActions) {
             TText(" " + job.job.label, Modifier.weight(1f), style = TerminalTheme.type.body.copy(fontWeight = FontWeight.Bold))
             TText(job.counter, color = c.dim)
         }
-        TBlockBar(job.fraction)
+        if (job.matching) TBlockBarIndeterminate() else TBlockBar(job.fraction)
         job.log.forEach { line ->
             val (glyph, color) = when (line.kind) {
                 LogKind.Done -> "✓" to c.ok
@@ -195,7 +197,12 @@ private fun RunningJob(job: JobView, actions: DownloadActions) {
                 TText(line.text, color = if (line.kind == LogKind.Info) c.dim else color)
             }
         }
-        if (job.log.isEmpty()) TText(job.detail, color = c.dim, maxLines = 2)
+        if (job.matching) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TSpinner()
+                TText("matching songs on youtube, the first ones can take a few minutes", color = c.dim, maxLines = 2)
+            }
+        } else if (job.log.isEmpty()) TText(job.detail, color = c.dim, maxLines = 2)
         Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
             Box(Modifier.clickable(role = Role.Button, onClickLabel = "Stop ${job.job.label}") { actions.stopJob(job.job) }.padding(8.dp)) {
                 TText("stop", color = c.error)
