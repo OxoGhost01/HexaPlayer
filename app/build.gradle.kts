@@ -40,6 +40,16 @@ android {
     }
 }
 
+// Update screen test: `./gradlew installDebug -PupdateFrom=1.4` makes the debug build
+// report that version, so the latest GitHub release shows up as an update.
+androidComponents {
+    onVariants(selector().withBuildType("debug")) { variant ->
+        (findProperty("updateFrom") as String?)?.let { from ->
+            variant.outputs.forEach { it.versionName.set(from) }
+        }
+    }
+}
+
 kotlin {
     jvmToolchain(17)
 }
