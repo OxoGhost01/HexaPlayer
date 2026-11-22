@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="colorBackground">#FF0A0008</color>
+    <!-- Material "Hexa" scheme (dark): Android Auto takes its accents from the app theme -->
+    <color name="hexaPrimary">#FFE0B8F6</color>
+    <color name="hexaPrimaryContainer">#FF5A396E</color>
 </resources>

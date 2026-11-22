@@ -5,6 +5,9 @@
         <item name="android:windowBackground">@color/colorBackground</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:colorPrimary">@color/hexaPrimary</item>
+        <item name="android:colorPrimaryDark">@color/hexaPrimaryContainer</item>
+        <item name="android:colorAccent">@color/hexaPrimary</item>
     </style>
 
     <!-- Open with: a sheet over the calling app -->
