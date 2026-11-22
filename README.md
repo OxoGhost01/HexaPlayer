@@ -13,20 +13,22 @@ HexaPlayer plays the music already on your phone, fast and without distractions.
 ### Two interfaces
 - **Terminal** or **Material**: two complete interfaces with the same features, switched live in Settings > Appearance
 - **Terminal flavors**: 7 color themes, plus your own made with the built-in color picker, and pixel-art covers
-- **Material colors**: 7 palettes, your wallpaper colors (Android 12+) or the colors of the album playing
+- **Material colors**: 15 palettes in 4 styles (Muted, Vibrant, Expressive, Faithful), your wallpaper colors (Android 12+) or the colors of the album playing
+- **Smooth Material motion**: covers fly from the grid into their page, the player and mini player follow your swipes
 - **Pure black** background for AMOLED screens
 
 ### Your library
-- **Browse** by Songs, Albums, Artists, Playlists or Folders, with sorting everywhere
+- **Browse** by Songs, Albums, Artists, Playlists or Folders, with sorting everywhere. The library remembers where you were
+- **Pinch the grids** (or pick in Settings) to see 2, 3 or 4 albums per row
 - **Search** songs, albums, artists and the lyrics you've already opened
-- **Album, artist and playlist pages** with play counts
+- **Album, artist and playlist pages** with your most played songs
 - **Multi-select** (long press and drag): play next, queue, add to a playlist or edit tags together
 - **Edit song info** (title, artist, album, album artist, year, track, disc, genre, cover): written into the file itself
 - **Playlists** with custom covers, drag to reorder, add a whole album at once
 - **Choose your library folder** to only show the music you care about
 
 ### Playback
-- **Full-screen player** with seek bar, shuffle, repeat, lyrics, queue and sleep timer
+- **Full-screen player** with seek bar, shuffle, repeat, lyrics, queue and sleep timer. Swipe the cover to skip, drag down to close
 - **Remembers your queue**: pick up where you left off, even after a restart
 - **Smart queue**: playing a song queues the rest of its album; Play Next, Add to Queue, drag and drop to reorder
 - **Lyrics**: synced (LRC) and plain lyrics from [LRCLIB](https://lrclib.net), with a per-song offset
@@ -43,12 +45,13 @@ HexaPlayer plays the music already on your phone, fast and without distractions.
 - Paste a **Spotify link** (playlist, album or track) and the music lands in your library folder, named after the playlist or album
 - **Sync** keeps a playlist up to date: new songs are added, removed ones are deleted. Synced playlists can be re-synced in one tap
 - **Stop** any download, **run it again** later: songs already on your phone are skipped. Follow each song live while it downloads
+- **See which songs failed** and why, with a link to each one on Spotify
 - Runs [spotDL](https://github.com/spotDL/spotify-downloader) inside **Termux**, on your phone. No account, no server, nothing leaves your device
 - HexaPlayer starts the downloader only when you need it, and it stops by itself when idle (or with the Stop button)
 - A step by step **setup guide** is built into the app. Details in the [Termux guide](termux/README.md)
 
 ### Everywhere else
-- **Android Auto**: browse Songs, Albums, Artists, Playlists and Folders, with voice search
+- **Android Auto**: Home, Albums, Artists and Playlists with covers, search, voice ("Hey Google, play ... on HexaPlayer") and your queue back when you start the car
 - **Widgets**: 4×1 and 5×1 home screen widgets that follow your interface and colors, with a Resume button
 - **In-app updates**: get notified and install new versions directly
 
@@ -133,11 +136,6 @@ When you edit a song's info, Android asks you to confirm the change for those fi
 Your play history (for Home and Wrapped) is stored only on your phone, in the app's private storage.
 
 No location, contacts, camera, microphone or account access. No analytics, no ads, and nothing about you or your music is ever sent anywhere.
-
-## Planned Features
-
-- **Song recognition**: find the name of a song playing around you
-- **Android Auto**: it's currently in beta, so i should finish it one day x)
 
 ## Tech Stack
 
