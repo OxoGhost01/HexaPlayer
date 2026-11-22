@@ -9,6 +9,7 @@ import com.oxoghost.hexaplayer.ui.common.artModel
 import com.oxoghost.hexaplayer.ui.common.fileDetails
 import com.oxoghost.hexaplayer.ui.material.screens.MAddSongsSheet
 import com.oxoghost.hexaplayer.ui.material.screens.MAddToSheet
+import com.oxoghost.hexaplayer.ui.material.screens.MFailedSongsSheet
 import com.oxoghost.hexaplayer.ui.material.screens.MFileDetailsSheet
 import com.oxoghost.hexaplayer.ui.material.screens.MPlaylistEditorSheet
 import com.oxoghost.hexaplayer.ui.material.screens.MSleepSheet
@@ -24,6 +25,7 @@ import com.oxoghost.hexaplayer.ui.state.UiModel
 import com.oxoghost.hexaplayer.ui.state.rememberAudioInfo
 import com.oxoghost.hexaplayer.ui.terminal.screens.TAddSongsPopup
 import com.oxoghost.hexaplayer.ui.terminal.screens.TAddToPopup
+import com.oxoghost.hexaplayer.ui.terminal.screens.TFailedSongsPopup
 import com.oxoghost.hexaplayer.ui.terminal.screens.TFileDetailsPopup
 import com.oxoghost.hexaplayer.ui.terminal.screens.TPlaylistEditorPopup
 import com.oxoghost.hexaplayer.ui.terminal.screens.TSleepPopup
@@ -65,6 +67,9 @@ fun SheetHost(terminal: Boolean, pixelCovers: Boolean, ui: UiModel, vm: MusicVie
             val info = rememberAudioInfo(vm, sheet.song)
             val rows = fileDetails(sheet.song, info)
             if (terminal) TFileDetailsPopup(sheet.song, rows, actions) else MFileDetailsSheet(rows, actions)
+        }
+        is Sheet.FailedSongs -> {
+            if (terminal) TFailedSongsPopup(sheet, actions) else MFailedSongsSheet(sheet, actions)
         }
         Sheet.Sleep -> {
             val pick = remember { SleepPick(vm.sleepTimerTotalMs.takeIf { it > 0 }?.div(1000) ?: 30 * 60L) }

@@ -84,6 +84,7 @@ interface DownloadActions {
     fun stopJob(job: SpotdlJob)
     fun retryJob(job: SpotdlJob)
     fun clearFinished()
+    fun showFailed(job: SpotdlJob)
     fun resync(entry: SyncEntry)
     fun startServer()
     fun stopServer()
@@ -148,6 +149,7 @@ class DownloadModel(
     private val context: Context,
     private val vm: DownloadViewModel,
     private val system: SystemAccess,
+    private val ui: UiModel,
     private val onOpenSetup: () -> Unit,
 ) : DownloadActions, TermuxSetupActions {
 
@@ -160,6 +162,9 @@ class DownloadModel(
     override fun stopJob(job: SpotdlJob) = vm.stop(job)
     override fun retryJob(job: SpotdlJob) = vm.retry(job)
     override fun clearFinished() = vm.clearFinished()
+    override fun showFailed(job: SpotdlJob) {
+        ui.sheet = Sheet.FailedSongs(job.label, job.failedSongs)
+    }
     override fun resync(entry: SyncEntry) = vm.resync(entry)
 
     override fun startServer() {

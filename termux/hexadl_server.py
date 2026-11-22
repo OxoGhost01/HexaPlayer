@@ -35,12 +35,14 @@ from pydantic import BaseModel
 # --------------------------------------------------------------------------- #
 
 # Bump when the app needs a newer server; the app asks users to re-run setup below its minimum
-SERVER_VERSION = 3
+SERVER_VERSION = 4
 
 ROOT = Path(os.environ.get("HEXADL_ROOT", "./music")).resolve()
 # Jobs may write anywhere under shared storage (the app's Music Library folder)
 SHARED = Path(os.environ.get("HEXADL_SHARED", "/storage/emulated/0")).resolve()
 SYNC_DIR = Path(os.environ.get("HEXADL_SYNC_DIR", str(ROOT / ".hexadl" / "syncs"))).resolve()
+# Per-job spotDL error lists and song lists, deleted once the job has read them
+JOB_DIR = SYNC_DIR.parent / "jobs"
 SPOTDL_BIN = os.environ.get("HEXADL_SPOTDL_BIN", "spotdl")
 # Default to opus + no re-encode: YouTube Music already serves opus, so this
 # keeps the original stream instead of spotDL's default of transcoding it
@@ -57,6 +59,7 @@ AUDIO_EXTS = {".mp3", ".m4a", ".flac", ".opus", ".ogg", ".wav"}
 
 ROOT.mkdir(parents=True, exist_ok=True)
 SYNC_DIR.mkdir(parents=True, exist_ok=True)
+JOB_DIR.mkdir(parents=True, exist_ok=True)
 
 app = FastAPI(title="HexaDL", description="spotDL companion server for HexaPlayer")
 
@@ -98,6 +101,10 @@ class Job:
         self.stop_requested = False
         self.last_song_at = time.time()  # when spotDL last reported a finished song
         self.log_tail: List[str] = []
+        # spotDL writes each failure here (--save-errors); songs_file maps its links to names
+        self.errors_file = JOB_DIR / f"{job_id}.errors"
+        self.songs_file: Optional[Path] = None
+        self.failed_songs: List[dict] = []  # {"title", "reason", "url"} once the job ends
 
     def as_dict(self) -> dict:
         return {
@@ -114,6 +121,7 @@ class Job:
             "folders": self.folders,
             "files": self.files,
             "log": self.log_tail[-8:],
+            "failed_songs": self.failed_songs,
         }
 
 
@@ -129,8 +137,10 @@ _TOTAL_RE = re.compile(r'Found (\d+) songs', re.IGNORECASE)
 
 
 def _run_pass(job: Job, cmd: List[str]) -> int:
+    # Only the last pass's errors count: a retry clears what it fixed.
+    job.errors_file.unlink(missing_ok=True)
     proc = subprocess.Popen(
-        cmd,
+        [*cmd, "--save-errors", str(job.errors_file)],
         cwd=str(job.out_dir),
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
@@ -171,6 +181,7 @@ def _run_job(job: Job, cmd: List[str], retry_cmd: List[str]) -> None:
             job.done = job.failed = 0
             job.message = f"Retrying {retrying} failed track(s)..."
             code = _run_pass(job, retry_cmd)
+        _collect_failures(job)
         if job.stop_requested:
             _collect_files(job, drop_recent=True)
             job.status = "stopped"
@@ -189,6 +200,64 @@ def _run_job(job: Job, cmd: List[str], retry_cmd: List[str]) -> None:
     job.status = "done"
     ok = job.done - job.failed
     job.message = f"Finished: {ok} track(s)" + (f", {job.failed} failed" if job.failed else "")
+
+
+_ERROR_LINE_RE = re.compile(r'^(https?://\S+) - (\w+): (.*)$')
+_ERROR_DATE_RE = re.compile(r'^\d{4}(-\d{2}){5}$')
+
+
+def _failure_reason(kind: str, message: str) -> str:
+    if kind == "LookupError" or "No results found" in message:
+        return "Not found on YouTube"
+    if kind == "AudioProviderError":
+        return "YouTube download failed"
+    if kind in ("FFmpegError", "ConversionError"):
+        return "Conversion failed"
+    if "NoneType" in message:
+        return "Spotify didn't answer"
+    return f"{kind}: {message}"[:80]
+
+
+def _song_names(songs_file: Optional[Path]) -> Dict[str, str]:
+    """Spotify link -> "Artist - Title", from a .spotdl file (a sync file or a download's song list)."""
+    if songs_file is None or not songs_file.exists():
+        return {}
+    try:
+        data = json.loads(songs_file.read_text(encoding="utf-8"))
+    except Exception:  # noqa: BLE001
+        return {}
+    songs = data.get("songs", []) if isinstance(data, dict) else data
+    names = {}
+    for song in songs or []:
+        if isinstance(song, dict) and song.get("url"):
+            artist = song.get("artist") or ", ".join(song.get("artists") or [])
+            names[song["url"]] = f"{artist} - {song.get('name', '')}".strip(" -")
+    return names
+
+
+def _collect_failures(job: Job) -> None:
+    """Names the songs that failed, from spotDL's error file, so the app can list them."""
+    if not job.errors_file.exists():
+        return
+    names = _song_names(job.songs_file)
+    failed = []
+    for line in job.errors_file.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or _ERROR_DATE_RE.match(line):
+            continue
+        m = _ERROR_LINE_RE.match(line)
+        if m:
+            url, kind, message = m.groups()
+            failed.append({"title": names.get(url, url), "reason": _failure_reason(kind, message), "url": url})
+        else:
+            # e.g. "Song is missing required fields: Artist - Title"
+            title = line.split(": ", 1)[-1]
+            failed.append({"title": title, "reason": line.split(": ", 1)[0][:80], "url": ""})
+    job.failed_songs = failed
+    job.failed = len(failed)
+    job.errors_file.unlink(missing_ok=True)
+    if job.kind != "sync" and job.songs_file is not None:
+        job.songs_file.unlink(missing_ok=True)
 
 
 def _collect_files(job: Job, drop_recent: bool = False) -> None:
@@ -313,10 +382,13 @@ def create_job(req: JobRequest) -> dict:
             # First run: download everything and create the sync file.
             cmd = [*base, "sync", url, "--save-file", str(sync_file)]
         retry_cmd = [*base, "sync", str(sync_file)]
+        job.songs_file = sync_file
         # Remember the human name/url alongside the sync file for /syncs.
         _write_sync_meta(sync_file, url, folder, root)
     else:
-        cmd = [*base, "download", url]
+        # The song list names the failures afterwards.
+        job.songs_file = JOB_DIR / f"{job_id}.spotdl"
+        cmd = [*base, "download", url, "--save-file", str(job.songs_file)]
         retry_cmd = cmd
 
     with JOBS_LOCK:

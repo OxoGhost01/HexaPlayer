@@ -307,6 +307,7 @@ class DownloadViewModel(application: Application) : AndroidViewModel(application
                         serverTotal = s.total,
                         serverFailed = s.failed,
                         log = s.log,
+                        failedSongs = s.failedSongs,
                         message = if (job.id in stopping && s.status == "running") "Stopping…" else s.message
                     )
                     upsert(current)

@@ -6,6 +6,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.oxoghost.hexaplayer.data.FailedSong
 import com.oxoghost.hexaplayer.data.Playlist
 import com.oxoghost.hexaplayer.data.Song
 import com.oxoghost.hexaplayer.repository.CoverChange
@@ -19,6 +20,9 @@ sealed interface Sheet {
     data class AddTo(val songs: List<Song>, val label: String? = null) : Sheet
     data class AddSongs(val playlist: Playlist) : Sheet
     data class FileDetails(val song: Song) : Sheet
+
+    /** The songs a download or sync couldn't get; [songs] is null with a server older than 4. */
+    data class FailedSongs(val label: String, val songs: List<FailedSong>?) : Sheet
     data object Sleep : Sheet
 
     /** [playlist] null creates a new one. */

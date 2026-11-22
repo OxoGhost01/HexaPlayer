@@ -12,9 +12,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import com.oxoghost.hexaplayer.data.Playlist
@@ -163,6 +166,37 @@ fun TFileDetailsPopup(song: Song, rows: List<Pair<String, String>>, actions: Hex
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     TText(label, Modifier.width(96.dp), color = c.dim)
                     TText(value, Modifier.weight(1f), maxLines = 3)
+                }
+            }
+            TButton("close", actions::closeSheet, Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 6.dp), large = true)
+        }
+    }
+}
+
+@Composable
+fun TFailedSongsPopup(sheet: Sheet.FailedSongs, actions: HexaActions) {
+    val c = TerminalTheme.colors
+    val uri = LocalUriHandler.current
+    val songs = sheet.songs
+    TPopup(true, title = "failed · ${sheet.label}", onDismiss = actions::closeSheet, borderColor = c.error) {
+        Column(Modifier.padding(horizontal = 14.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            if (songs == null) {
+                TText("run the setup command in termux again to list the failed songs", color = c.dim, maxLines = 3)
+            } else {
+                Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    songs.forEach { song ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                            TText("✗", color = c.error)
+                            Column(Modifier.weight(1f)) {
+                                TText(if (song.named) song.title else "unknown song", maxLines = 2)
+                                TText(song.reason.lowercase(), color = c.dim)
+                            }
+                            if (song.url.isNotEmpty()) {
+                                TText("[open]", Modifier.clickable(role = Role.Button, onClickLabel = "Open on Spotify") { uri.openUri(song.url) }
+                                    .padding(8.dp), color = c.accent)
+                            }
+                        }
+                    }
                 }
             }
             TButton("close", actions::closeSheet, Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 6.dp), large = true)

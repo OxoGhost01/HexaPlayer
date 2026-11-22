@@ -30,6 +30,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -194,6 +195,40 @@ fun MFileDetailsSheet(rows: List<Pair<String, String>>, actions: HexaActions) {
                 }
             }
         }
+    }
+}
+
+/** The songs a download or sync couldn't get, with why, and a way to find them on Spotify. */
+@Composable
+fun MFailedSongsSheet(sheet: Sheet.FailedSongs, actions: HexaActions) {
+    val s = MaterialTheme.colorScheme
+    val uri = LocalUriHandler.current
+    val songs = sheet.songs
+    MBottomSheet(onDismiss = actions::closeSheet) {
+        SheetTitle(if (songs == null) "Failed songs" else "${songs.size} failed in ${sheet.label}")
+        if (songs == null) {
+            Text(
+                "Run the setup command in Termux again (Download > guide) to see which songs failed.",
+                Modifier.padding(bottom = 16.dp), color = s.onSurfaceVariant, style = MaterialTheme.typography.bodyLarge,
+            )
+            return@MBottomSheet
+        }
+        LazyColumn(Modifier.heightIn(max = 480.dp)) {
+            itemsIndexed(songs) { i, song ->
+                MSegment(i, songs.size, Modifier.padding(bottom = 2.dp), minHeight = 64) {
+                    Column(Modifier.weight(1f)) {
+                        Text(if (song.named) song.title else "Unknown song", style = MaterialTheme.typography.titleSmall,
+                            maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        Text(song.reason, color = s.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
+                    }
+                    if (song.url.isNotEmpty()) {
+                        MPillButton("Spotify", { uri.openUri(song.url) }, style = MButtonStyle.Text, size = MButtonSize.S)
+                    }
+                }
+            }
+        }
+        Text("Run again retries them: songs already on your phone are skipped.",
+            Modifier.padding(vertical = 12.dp), color = s.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
     }
 }
 

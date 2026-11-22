@@ -1,5 +1,6 @@
 package com.oxoghost.hexaplayer.repository
 
+import com.oxoghost.hexaplayer.data.FailedSong
 import com.oxoghost.hexaplayer.data.JobKind
 import com.oxoghost.hexaplayer.data.SyncEntry
 import kotlinx.coroutines.Dispatchers
@@ -21,6 +22,7 @@ data class ServerJob(
     val files: List<String>,
     val failed: Int = 0,
     val log: List<String> = emptyList(),
+    val failedSongs: List<FailedSong>? = null,
 )
 
 /** Result of `GET /health`. */
@@ -73,6 +75,13 @@ class DownloadRepository {
             val files = (0 until filesArr.length()).map { filesArr.getString(it) }
             val logArr = obj.optJSONArray("log") ?: JSONArray()
             val log = (0 until logArr.length()).map { logArr.getString(it) }
+            // Server 4 and up names the failed songs.
+            val failedSongs = obj.optJSONArray("failed_songs")?.let { arr ->
+                (0 until arr.length()).map { i ->
+                    val f = arr.getJSONObject(i)
+                    FailedSong(f.optString("title"), f.optString("reason"), f.optString("url"))
+                }
+            }
             ServerJob(
                 status = obj.optString("status", "running"),
                 done = obj.optInt("done", 0),
@@ -83,6 +92,7 @@ class DownloadRepository {
                 files = files,
                 failed = obj.optInt("failed", 0),
                 log = log,
+                failedSongs = failedSongs,
             )
         }
 

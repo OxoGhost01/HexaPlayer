@@ -21,7 +21,14 @@ data class SpotdlJob(
     val serverFailed: Int = 0,
     /** Last lines spotDL printed, for the live per-track log. */
     val log: List<String> = emptyList(),
+    /** The songs that failed, once the job ended; null when the server is too old to say. */
+    val failedSongs: List<FailedSong>? = null,
 )
+
+/** A song spotDL couldn't get: [title] is "Artist - Title", or its Spotify link when unknown. */
+data class FailedSong(val title: String, val reason: String, val url: String) {
+    val named: Boolean get() = !title.startsWith("http")
+}
 
 enum class JobKind { DOWNLOAD, SYNC }
 

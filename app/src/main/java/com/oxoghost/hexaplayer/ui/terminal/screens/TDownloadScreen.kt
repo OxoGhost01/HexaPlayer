@@ -220,6 +220,10 @@ private fun FinishedJob(job: JobView, actions: DownloadActions) {
             Column(Modifier.weight(1f)) {
                 TText(job.job.label)
                 TText("${job.kind} · ${job.detail}", color = c.dim, maxLines = 2, style = TerminalTheme.type.small)
+                if (job.job.serverFailed > 0) {
+                    TText("[see failed]", Modifier.clickable(role = Role.Button, onClickLabel = "See the failed songs") { actions.showFailed(job.job) }
+                        .padding(vertical = 4.dp), color = c.error, style = TerminalTheme.type.small)
+                }
             }
             Box(Modifier.clickable(role = Role.Button, onClickLabel = "Run ${job.job.label} again") { actions.retryJob(job.job) }.padding(8.dp)) {
                 TText("run again", color = c.accent, style = TerminalTheme.type.body.copy(textAlign = TextAlign.End))
