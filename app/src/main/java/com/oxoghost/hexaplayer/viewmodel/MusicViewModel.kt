@@ -2,7 +2,6 @@ package com.oxoghost.hexaplayer.viewmodel
 
 import android.app.Application
 import android.content.ComponentName
-import android.content.ContentUris
 import android.content.Context
 import android.media.MediaScannerConnection
 import android.net.Uri
@@ -15,8 +14,8 @@ import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.MediaItem
-import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
+import androidx.media3.common.Timeline
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionToken
@@ -28,6 +27,7 @@ import com.oxoghost.hexaplayer.data.Playlist
 import com.oxoghost.hexaplayer.data.Song
 import com.oxoghost.hexaplayer.data.db.CachedLyrics
 import com.oxoghost.hexaplayer.data.db.HexaDatabase
+import com.oxoghost.hexaplayer.data.toMediaItem
 import com.oxoghost.hexaplayer.repository.CoverChange
 import com.oxoghost.hexaplayer.repository.CoverRepository
 import com.oxoghost.hexaplayer.repository.HistoryRepository
@@ -221,7 +221,39 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         override fun onRepeatModeChanged(repeatMode: Int) {
             _repeatMode.postValue(repeatMode)
         }
+
+        // A queue set from Android Auto, a voice request or the widget. Checked a moment later so
+        // the app's own queue edits have updated contextQueue and uqEntries first.
+        override fun onTimelineChanged(timeline: Timeline, reason: Int) {
+            if (reason != Player.TIMELINE_CHANGE_REASON_PLAYLIST_CHANGED) return
+            handler.post {
+                if (queueMatchesPlayer()) return@post
+                if (_songs.value.isNullOrEmpty()) { rebuildAfterLoad = true; return@post }
+                rebuildQueueFromPlayer()
+                _queueSource.value = queueStore.source
+                syncCurrentSong()
+            }
+        }
     }
+
+    /** True while the app's queue model still describes what the player holds. */
+    private fun queueMatchesPlayer(): Boolean {
+        val ctrl = controller ?: return true
+        var ctx = 0
+        for (i in 0 until ctrl.mediaItemCount) {
+            val item = ctrl.getMediaItemAt(i)
+            if (item.mediaId.startsWith("uq:")) {
+                if (uqEntries.none { it.mediaId == item.mediaId }) return false
+            } else {
+                val song = contextQueue.getOrNull(ctx++) ?: return false
+                if (!item.isSong(song)) return false
+            }
+        }
+        return ctx == contextQueue.size
+    }
+
+    private fun MediaItem.isSong(song: Song): Boolean =
+        localConfiguration?.uri?.let { it == song.uri } ?: (mediaMetadata.title?.toString() == song.title)
 
     // Receives session-level events from the service. The shared shuffler lives in the
     // service, so when shuffle is toggled from EITHER the phone app or Android Auto the
@@ -294,18 +326,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
             }.distinct().toTypedArray()
             scanDirectories(scanDirs)
 
-            val filter = musicFolder.ifBlank { null }
-            var songList = musicRepository.getAllSongs(filter, sortOrder)
-            if (!showUnknownSongs) {
-                songList = songList.filter { s ->
-                    s.title.isNotBlank() && s.title != "Unknown" &&
-                    s.artist.isNotBlank() && s.artist != "Unknown Artist"
-                }
-            }
-            songList = songList.map { song ->
-                val override = coverRepository.getOverride(song.id)
-                if (override != null) song.copy(customCoverUri = override) else song
-            }
+            val songList = musicRepository.loadVisibleSongs()
             _songs.postValue(songList)
             _albums.postValue(musicRepository.groupByAlbums(songList))
             _artists.postValue(musicRepository.groupByArtists(songList))
@@ -411,7 +432,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         _isPlayingFromUserQueue.value = false
         _shuffleMode.value = false
 
-        val items = songs.mapIndexed { idx, song -> song.toCtxMediaItem(idx) }
+        val items = songs.mapIndexed { idx, song -> song.toMediaItem("ctx:$idx") }
         ctrl.setMediaItems(items, startIndex, 0L)
         ctrl.shuffleModeEnabled = false
         ctrl.prepare()
@@ -437,7 +458,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         val ctrl = controller ?: return
         val uid = "uq:${System.nanoTime()}"
         val insertAt = ctrl.currentMediaItemIndex + 1
-        ctrl.addMediaItem(insertAt, song.toUqMediaItem(uid))
+        ctrl.addMediaItem(insertAt, song.toMediaItem(uid))
         uqEntries.add(0, UQEntry(song, uid))
         _userQueueLive.postValue(uqEntries.map { it.song })
     }
@@ -446,7 +467,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         val ctrl = controller ?: return
         val uid = "uq:${System.nanoTime()}"
         val insertAt = ctrl.currentMediaItemIndex + 1 + uqEntries.size
-        ctrl.addMediaItem(insertAt, song.toUqMediaItem(uid))
+        ctrl.addMediaItem(insertAt, song.toMediaItem(uid))
         uqEntries.add(UQEntry(song, uid))
         _userQueueLive.postValue(uqEntries.map { it.song })
     }
@@ -616,7 +637,9 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
             mid.removePrefix("song:").toLongOrNull()?.let { id -> byId[id]?.let { return it } }
         }
         item.localConfiguration?.uri?.let { uri -> byUri[uri]?.let { return it } }
-        return null
+        val title = item.mediaMetadata.title?.toString() ?: return null
+        val artist = item.mediaMetadata.artist?.toString()
+        return byId.values.firstOrNull { it.title == title && it.artist == artist }
     }
 
     fun toggleRepeat() {
@@ -680,7 +703,9 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
             val ctxIdx = (exoIdx - uqBefore).coerceAtLeast(0)
             contextCurrentIndex = ctxIdx
             _currentQueueIndex.postValue(ctxIdx)
-            song = contextQueue.getOrNull(ctxIdx) ?: findSongFromMetadata(ctrl)
+            // The index can point into a queue the app hasn't caught up with yet.
+            song = contextQueue.getOrNull(ctxIdx)?.takeIf { ctrl.currentMediaItem?.isSong(it) == true }
+                ?: findSongFromMetadata(ctrl)
         }
 
         if (song != null) {
@@ -790,40 +815,6 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         controller?.release()
     }
 }
-
-private fun Song.albumArtUri(): Uri = ContentUris.withAppendedId(
-    Uri.parse("content://media/external/audio/albumart"), albumId
-)
-
-private fun Song.toCtxMediaItem(contextIdx: Int): MediaItem =
-    MediaItem.Builder()
-        .setUri(uri)
-        .setMediaId("ctx:$contextIdx")
-        .setMediaMetadata(
-            MediaMetadata.Builder()
-                .setTitle(title)
-                .setArtist(artist)
-                .setAlbumTitle(album)
-                .setArtworkUri(albumArtUri())
-                .setExtras(Bundle().apply { putLong("albumId", albumId) })
-                .build()
-        )
-        .build()
-
-private fun Song.toUqMediaItem(uid: String): MediaItem =
-    MediaItem.Builder()
-        .setUri(uri)
-        .setMediaId(uid)
-        .setMediaMetadata(
-            MediaMetadata.Builder()
-                .setTitle(title)
-                .setArtist(artist)
-                .setAlbumTitle(album)
-                .setArtworkUri(albumArtUri())
-                .setExtras(Bundle().apply { putLong("albumId", albumId) })
-                .build()
-        )
-        .build()
 
 private fun CachedLyrics.toState(): LyricsState.Found {
     val times = timestamps.split(',').mapNotNull { it.trim().toLongOrNull() }
