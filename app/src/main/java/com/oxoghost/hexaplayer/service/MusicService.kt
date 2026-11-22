@@ -61,6 +61,10 @@ class MusicService : MediaLibraryService() {
     // shuffleModeEnabled is always kept false so it never re-orders on top of ours.
     private var shuffleOn = false
 
+    // The app puts the remembered queue back, paused, each time it opens. The widget keeps its
+    // Resume view until something actually plays.
+    private var playedThisSession = false
+
     companion object {
         var audioSessionId: Int = 0
             private set
@@ -87,6 +91,7 @@ class MusicService : MediaLibraryService() {
     // ── Player listener → keep widgets in sync + update the shuffle/repeat buttons ─
     private val playerListener = object : Player.Listener {
         override fun onIsPlayingChanged(isPlaying: Boolean) {
+            if (isPlaying) playedThisSession = true
             pushWidgetState()
             mediaLibrarySession?.player?.let { tracker.onIsPlayingChanged(it, isPlaying) }
             saveQueueSoon()
@@ -174,7 +179,7 @@ class MusicService : MediaLibraryService() {
     private fun pushWidgetState() {
         val player = mediaLibrarySession?.player ?: return
         val meta = player.currentMediaItem?.mediaMetadata
-        if (meta == null) {
+        if (meta == null || !playedThisSession) {
             WidgetController.saveIdle(this)
         } else {
             WidgetController.saveState(
