@@ -12,8 +12,12 @@ import com.materialkolor.dynamiccolor.DynamicColor
 import com.materialkolor.dynamiccolor.MaterialDynamicColors
 import com.materialkolor.hct.Hct
 import com.materialkolor.scheme.DynamicScheme
+import com.materialkolor.scheme.SchemeExpressive
+import com.materialkolor.scheme.SchemeFidelity
 import com.materialkolor.scheme.SchemeMonochrome
 import com.materialkolor.scheme.SchemeTonalSpot
+import com.materialkolor.scheme.SchemeVibrant
+import com.oxoghost.hexaplayer.ui.settings.ColorStyle
 import com.oxoghost.hexaplayer.ui.tokens.DesignTokens
 import com.oxoghost.hexaplayer.ui.tokens.MaterialSchemeTokens
 
@@ -30,23 +34,45 @@ object MaterialSchemes {
 
     private val dynamicColors = MaterialDynamicColors()
 
-    val presetNames: List<String> get() = DesignTokens.Material.schemes.keys.toList()
+    /** Presets added after the handoff: seeds only, schemes built at runtime. */
+    private val extraSeeds: Map<String, Color> = linkedMapOf(
+        "Crimson" to Color(0xFFD32F2F),
+        "Coral" to Color(0xFFFF7043),
+        "Sunflower" to Color(0xFFFBC02D),
+        "Lime" to Color(0xFFAEEA00),
+        "Sky" to Color(0xFF00B8D4),
+        "Indigo" to Color(0xFF3949AB),
+        "Mocha" to Color(0xFF795548),
+        "Slate" to Color(0xFF607D8B),
+    )
+
+    val presetNames: List<String> get() = DesignTokens.Material.schemes.keys.toList() + extraSeeds.keys
 
     fun isWallpaperAvailable(): Boolean = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
 
-    /** A preset from tokens.json; roles the tokens don't list come from the same seed. */
-    fun preset(name: String): ColorScheme {
+    /**
+     * A preset in [style]. Muted presets from tokens.json use the precomputed roles; Graphite
+     * stays grey whatever the style.
+     */
+    fun preset(name: String, style: ColorStyle = ColorStyle.Muted): ColorScheme {
+        extraSeeds[name]?.let { return fromSeed(it, style) }
         val key = if (name in DesignTokens.Material.schemes) name else DesignTokens.Material.DEFAULT_SCHEME
         val tokens = DesignTokens.Material.schemes.getValue(key)
         val seed = DesignTokens.Material.seeds[key] ?: DesignTokens.Material.seeds.getValue(DesignTokens.Material.DEFAULT_SCHEME)
-        return fromSeed(seed, monochrome = key == GRAPHITE).withTokens(tokens)
+        if (key == GRAPHITE) return fromSeed(seed, monochrome = true).withTokens(tokens)
+        return if (style == ColorStyle.Muted) fromSeed(seed).withTokens(tokens) else fromSeed(seed, style)
     }
 
-    /** TonalSpot dark scheme for any seed (album art, future sources). */
-    fun fromSeed(seed: Color, monochrome: Boolean = false): ColorScheme {
+    /** Dark scheme for any seed (album art, extra presets) in [style]. */
+    fun fromSeed(seed: Color, style: ColorStyle = ColorStyle.Muted, monochrome: Boolean = false): ColorScheme {
         val hct = Hct.fromInt(seed.toArgb())
-        val scheme = if (monochrome) SchemeMonochrome(hct, true, 0.0, SPEC)
-        else SchemeTonalSpot(hct, true, 0.0, SPEC)
+        val scheme = when {
+            monochrome -> SchemeMonochrome(hct, true, 0.0, SPEC)
+            style == ColorStyle.Vibrant -> SchemeVibrant(hct, true, 0.0, SPEC)
+            style == ColorStyle.Expressive -> SchemeExpressive(hct, true, 0.0, SPEC)
+            style == ColorStyle.Faithful -> SchemeFidelity(hct, true, 0.0, SPEC)
+            else -> SchemeTonalSpot(hct, true, 0.0, SPEC)
+        }
         return scheme.toColorScheme()
     }
 

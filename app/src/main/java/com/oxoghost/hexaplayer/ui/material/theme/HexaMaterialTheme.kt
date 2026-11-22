@@ -22,12 +22,13 @@ import com.oxoghost.hexaplayer.ui.settings.UiSettings
 @Composable
 fun HexaMaterialTheme(settings: UiSettings, albumSeed: Color? = null, content: @Composable () -> Unit) {
     val context = LocalContext.current
-    val target = remember(settings.materialSource, settings.materialPreset, settings.pureBlack, albumSeed) {
+    val target = remember(settings.materialSource, settings.materialPreset, settings.materialStyle, settings.pureBlack, albumSeed) {
+        val style = settings.materialStyle
         val base = when (settings.materialSource) {
-            MaterialSource.Preset -> MaterialSchemes.preset(settings.materialPreset)
+            MaterialSource.Preset -> MaterialSchemes.preset(settings.materialPreset, style)
             MaterialSource.Wallpaper -> MaterialSchemes.wallpaper(context, settings.materialPreset)
-            MaterialSource.AlbumArt -> albumSeed?.let { MaterialSchemes.fromSeed(it) }
-                ?: MaterialSchemes.preset(settings.materialPreset)
+            MaterialSource.AlbumArt -> albumSeed?.let { MaterialSchemes.fromSeed(it, style) }
+                ?: MaterialSchemes.preset(settings.materialPreset, style)
         }
         if (settings.pureBlack) base.pureBlack() else base
     }

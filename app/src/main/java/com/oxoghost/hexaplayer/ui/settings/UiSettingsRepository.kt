@@ -39,6 +39,7 @@ class UiSettingsRepository(context: Context) {
                 if (source == MaterialSource.Preset && p[Keys.MATERIAL_PRESET] == MaterialSchemes.ALBUM_ART) MaterialSource.AlbumArt else source
             },
             materialPreset = p[Keys.MATERIAL_PRESET] ?: defaults.materialPreset,
+            materialStyle = p[Keys.MATERIAL_STYLE].toEnum(defaults.materialStyle),
             pureBlack = p[Keys.PURE_BLACK] ?: defaults.pureBlack,
             tintPlayerWithCover = p[Keys.TINT_PLAYER] ?: defaults.tintPlayerWithCover,
             pixelCovers = p[Keys.PIXEL_COVERS] ?: defaults.pixelCovers,
@@ -57,6 +58,7 @@ class UiSettingsRepository(context: Context) {
         }
     }
     suspend fun setMaterialPreset(value: String) = put(Keys.MATERIAL_PRESET, value)
+    suspend fun setMaterialStyle(value: ColorStyle) = put(Keys.MATERIAL_STYLE, value.name)
     suspend fun setPureBlack(value: Boolean) = put(Keys.PURE_BLACK, value)
     suspend fun setTintPlayerWithCover(value: Boolean) = put(Keys.TINT_PLAYER, value)
     suspend fun setPixelCovers(value: Boolean) = put(Keys.PIXEL_COVERS, value)
@@ -89,6 +91,7 @@ class UiSettingsRepository(context: Context) {
         val TERMINAL_PALETTE = stringPreferencesKey("terminal_palette")
         val MATERIAL_SOURCE = stringPreferencesKey("material_source")
         val MATERIAL_PRESET = stringPreferencesKey("material_preset")
+        val MATERIAL_STYLE = stringPreferencesKey("material_style")
         val PURE_BLACK = booleanPreferencesKey("pure_black")
         val TINT_PLAYER = booleanPreferencesKey("tint_player_with_cover")
         val PIXEL_COVERS = booleanPreferencesKey("pixel_covers")

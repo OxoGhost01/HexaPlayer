@@ -51,11 +51,11 @@ import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
-import androidx.palette.graphics.Palette
 import com.oxoghost.hexaplayer.R
 import com.oxoghost.hexaplayer.service.MusicService
 import com.oxoghost.hexaplayer.ui.MainActivity
 import com.oxoghost.hexaplayer.ui.common.formatDuration
+import com.oxoghost.hexaplayer.ui.common.seedOf
 import com.oxoghost.hexaplayer.ui.material.theme.MaterialSchemes
 import com.oxoghost.hexaplayer.ui.material.theme.MaterialSchemes.pureBlack
 import com.oxoghost.hexaplayer.ui.settings.MaterialSource
@@ -85,12 +85,10 @@ private fun colorsFor(context: Context, settings: UiSettings, art: Bitmap?): Wid
         return WidgetColors(true, c.background, c.foreground, c.dim, c.accent, c.background, c.background, c.foreground, c.border, c.border)
     }
     val base = when (settings.materialSource) {
-        MaterialSource.Preset -> MaterialSchemes.preset(settings.materialPreset)
+        MaterialSource.Preset -> MaterialSchemes.preset(settings.materialPreset, settings.materialStyle)
         MaterialSource.Wallpaper -> MaterialSchemes.wallpaper(context, settings.materialPreset)
-        MaterialSource.AlbumArt -> art?.let { Palette.from(it).generate() }
-            ?.let { it.vibrantSwatch ?: it.dominantSwatch }
-            ?.let { MaterialSchemes.fromSeed(Color(it.rgb)) }
-            ?: MaterialSchemes.preset(settings.materialPreset)
+        MaterialSource.AlbumArt -> art?.let(::seedOf)?.let { MaterialSchemes.fromSeed(it, settings.materialStyle) }
+            ?: MaterialSchemes.preset(settings.materialPreset, settings.materialStyle)
     }
     val s = if (settings.pureBlack) base.pureBlack() else base
     return WidgetColors(

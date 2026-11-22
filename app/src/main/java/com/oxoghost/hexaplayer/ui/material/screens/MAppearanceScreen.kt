@@ -36,6 +36,7 @@ import com.oxoghost.hexaplayer.ui.material.components.MSegmentedGroup
 import com.oxoghost.hexaplayer.ui.material.components.MSubTopBar
 import com.oxoghost.hexaplayer.ui.material.components.SwatchShapes
 import com.oxoghost.hexaplayer.ui.material.theme.MaterialSchemes
+import com.oxoghost.hexaplayer.ui.settings.ColorStyle
 import com.oxoghost.hexaplayer.ui.settings.MaterialSource
 import com.oxoghost.hexaplayer.ui.settings.Skin
 import com.oxoghost.hexaplayer.ui.state.PlaybackState
@@ -68,6 +69,7 @@ fun MAppearanceScreen(
             )
             Preview(playback)
             ColorSource(state, actions)
+            if (state.ui.materialSource != MaterialSource.Wallpaper) ColorStyleRow(state, actions)
             Palettes(state, actions, rememberAlbumSeed(playback.song))
             MSegmentedGroup(Modifier.padding(bottom = 16.dp)) {
                 SwitchSegment(0, 2, "Pure black", "Saves battery on AMOLED screens", state.ui.pureBlack, actions::setPureBlack)
@@ -124,10 +126,21 @@ private fun ColorSource(state: SettingsState, actions: SettingsActions) {
 }
 
 @Composable
+private fun ColorStyleRow(state: SettingsState, actions: SettingsActions) {
+    MSectionLabel("Style", Modifier.padding(top = 4.dp))
+    MConnectedButtonGroup(
+        ColorStyle.entries.map { MGroupOption(it.label) },
+        state.ui.materialStyle.ordinal,
+        { actions.setMaterialStyle(ColorStyle.entries[it]) },
+    )
+}
+
+@Composable
 private fun Palettes(state: SettingsState, actions: SettingsActions, albumSeed: Color?) {
     val s = MaterialTheme.colorScheme
     val presets = MaterialSchemes.presetNames
     val source = state.ui.materialSource
+    val style = state.ui.materialStyle
     MSectionLabel("Palette", Modifier.padding(top = 4.dp))
     Column(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(28.dp)).background(s.surfaceContainer).padding(vertical = 16.dp),
@@ -139,8 +152,8 @@ private fun Palettes(state: SettingsState, actions: SettingsActions, albumSeed: 
                     // The "Album art" swatch is the album-art source, drawn from the current cover.
                     val albumArt = name == MaterialSchemes.ALBUM_ART
                     MPaletteSwatch(
-                        scheme = remember(name, albumArt && albumSeed != null, albumSeed) {
-                            if (albumArt && albumSeed != null) MaterialSchemes.fromSeed(albumSeed) else MaterialSchemes.preset(name)
+                        scheme = remember(name, albumArt && albumSeed != null, albumSeed, style) {
+                            if (albumArt && albumSeed != null) MaterialSchemes.fromSeed(albumSeed, style) else MaterialSchemes.preset(name, style)
                         },
                         label = name,
                         shape = SwatchShapes.forIndex(row * 4 + i),
