@@ -137,6 +137,7 @@ No location, contacts, camera, microphone or account access. No analytics, no ad
 ## Planned Features
 
 - **Song recognition**: find the name of a song playing around you
+- **Android Auto**: it's currently in beta, so i should finish it one day x)
 
 ## Tech Stack
 
