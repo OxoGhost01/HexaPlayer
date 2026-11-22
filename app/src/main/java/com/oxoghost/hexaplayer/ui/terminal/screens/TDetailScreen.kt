@@ -36,7 +36,6 @@ import com.oxoghost.hexaplayer.ui.common.artModel
 import com.oxoghost.hexaplayer.ui.common.format
 import com.oxoghost.hexaplayer.ui.common.formatDay
 import com.oxoghost.hexaplayer.ui.common.formatLengthShort
-import com.oxoghost.hexaplayer.ui.common.plural
 import com.oxoghost.hexaplayer.ui.common.qualityLine
 import com.oxoghost.hexaplayer.ui.common.rememberReorderState
 import com.oxoghost.hexaplayer.ui.common.reorderHandle
@@ -96,7 +95,6 @@ private fun AlbumScreen(detail: DetailState, playback: PlaybackState, actions: H
                         )
                         TText(listOfNotNull(detail.year.takeIf { it > 0 }?.toString(), "${detail.songs.size} songs").joinToString(" · "),
                             Modifier.padding(top = 6.dp), color = c.dim)
-                        if (detail.totalPlays > 0) TText("played ${plural(detail.totalPlays, "time")}", color = c.dim)
                         val quality = info?.qualityLine() ?: first?.format.orEmpty()
                         TText(listOf(formatLengthShort(detail.durationMs), quality).filter { it.isNotEmpty() }.joinToString(" · "), color = c.dim)
                     }

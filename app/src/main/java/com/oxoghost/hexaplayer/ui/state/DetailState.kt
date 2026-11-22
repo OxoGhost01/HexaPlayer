@@ -30,8 +30,6 @@ data class DetailState(
     /** Plays per song of this page, from play history. */
     val plays: Map<Long, Int> = emptyMap(),
 ) {
-    val totalPlays: Int get() = songs.sumOf { plays[it.id] ?: 0 }
-
     /** The page's songs with at least one play, most played first. */
     val mostPlayed: List<Pair<Song, Int>>
         get() = songs.mapNotNull { s -> plays[s.id]?.takeIf { it > 0 }?.let { s to it } }.sortedByDescending { it.second }.take(5)
