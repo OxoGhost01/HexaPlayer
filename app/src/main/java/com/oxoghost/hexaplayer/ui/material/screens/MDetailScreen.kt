@@ -61,6 +61,7 @@ import com.oxoghost.hexaplayer.ui.material.components.MPillButton
 import com.oxoghost.hexaplayer.ui.material.components.MSegment
 import com.oxoghost.hexaplayer.ui.material.components.MSegmentedGroup
 import com.oxoghost.hexaplayer.ui.material.components.MSelectionCircle
+import com.oxoghost.hexaplayer.ui.material.motion.sharedCover
 import com.oxoghost.hexaplayer.ui.material.theme.HexaShapes
 import com.oxoghost.hexaplayer.ui.state.DetailKey
 import com.oxoghost.hexaplayer.ui.state.DetailState
@@ -96,7 +97,10 @@ private fun AlbumContent(detail: DetailState, playback: PlaybackState, actions: 
         item {
             Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
                 val first = songs.firstOrNull()
-                CoverImage(detail.album?.artModel ?: first?.artModel, first?.albumKey, Modifier.size(168.dp), HexaShapes.coverAlbumHeader, "Cover of ${detail.title}")
+                val shared = detail.album?.let { "album:${it.id}" } ?: detail.playlist?.let { "playlist:${it.id}" }
+                CoverImage(detail.album?.artModel ?: first?.artModel, first?.albumKey,
+                    Modifier.size(168.dp).then(if (shared != null) Modifier.sharedCover(shared) else Modifier),
+                    HexaShapes.coverAlbumHeader, "Cover of ${detail.title}")
                 Column(Modifier.weight(1f)) {
                     Text(detail.title, style = MaterialTheme.typography.headlineMedium.copy(fontSize = 26.sp, fontWeight = FontWeight.Bold),
                         maxLines = 3, overflow = TextOverflow.Ellipsis)
@@ -109,7 +113,6 @@ private fun AlbumContent(detail: DetailState, playback: PlaybackState, actions: 
                     Text(
                         listOfNotNull(
                             detail.year.takeIf { it > 0 }?.toString(), "${songs.size} songs", formatLengthLong(detail.durationMs),
-                            detail.totalPlays.takeIf { it > 0 }?.let { plural(it, "play") },
                         ).joinToString(" · "),
                         color = s.onSurfaceVariant,
                         style = MaterialTheme.typography.bodyMedium,
@@ -128,7 +131,9 @@ private fun AlbumContent(detail: DetailState, playback: PlaybackState, actions: 
             }
         }
         itemsIndexed(songs, key = { _, song -> song.id }) { i, song ->
-            TrackSegment(song, songs, i, playback, actions, number = if (song.track > 0) song.track else i + 1, onPlay = { actions.play(songs, i, detail.source) })
+            Box(Modifier.animateItem()) {
+                TrackSegment(song, songs, i, playback, actions, number = if (song.track > 0) song.track else i + 1, onPlay = { actions.play(songs, i, detail.source) })
+            }
         }
     }
 }
@@ -225,7 +230,7 @@ private fun ArtistContent(detail: DetailState, playback: PlaybackState, actions:
         }
         item { Heading("Songs", Modifier.padding(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 8.dp)) }
         itemsIndexed(songs, key = { _, song -> song.id }) { i, song ->
-            Box(Modifier.padding(horizontal = 8.dp)) {
+            Box(Modifier.animateItem().padding(horizontal = 8.dp)) {
                 MSongRow(song, songs, i, playback, actions, onPlay = { actions.play(songs, i, detail.source) },
                     subtitle = "${song.album} · ${formatDuration(song.duration)}")
             }
@@ -284,7 +289,8 @@ private fun PlaylistContent(detail: DetailState, playlist: Playlist, playback: P
             item { Text("This playlist is empty. Add songs with +", Modifier.padding(vertical = 24.dp), color = s.onSurfaceVariant) }
         }
         itemsIndexed(songs, key = { i, song -> "$i:${song.id}" }) { i, _ ->
-            PlaylistSegment(detail, playlist, i, playback, actions, reorder, rowPx)
+            // Fades only: the drag to reorder places the rows itself.
+            Box(Modifier.animateItem(placementSpec = null)) { PlaylistSegment(detail, playlist, i, playback, actions, reorder, rowPx) }
         }
     }
 }

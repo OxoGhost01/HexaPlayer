@@ -3,6 +3,7 @@ package com.oxoghost.hexaplayer.ui.material.components
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,7 +16,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -24,6 +27,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.oxoghost.hexaplayer.ui.common.Symbol
 import com.oxoghost.hexaplayer.ui.common.Symbols
+import com.oxoghost.hexaplayer.ui.material.motion.pressScale
 import com.oxoghost.hexaplayer.ui.tokens.DesignTokens.Material.Metrics
 
 /**
@@ -45,8 +49,10 @@ fun MListRow(
     leading: @Composable () -> Unit,
 ) {
     val s = MaterialTheme.colorScheme
+    val interaction = remember { MutableInteractionSource() }
     Row(
         modifier
+            .then(if (gestures == null) Modifier.pressScale(interaction, 0.98f) else Modifier)
             .fillMaxWidth()
             .height(Metrics.listRow.dp)
             .clip(RoundedCornerShape(20.dp))
@@ -57,7 +63,7 @@ fun MListRow(
                     else -> Color.Transparent
                 }
             )
-            .then(gestures ?: Modifier.combinedClickable(onClick = onClick, onLongClick = onLongClick))
+            .then(gestures ?: Modifier.combinedClickable(interaction, ripple(), onClick = onClick, onLongClick = onLongClick))
             .padding(start = 8.dp, end = if (selected != null) 12.dp else 0.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),

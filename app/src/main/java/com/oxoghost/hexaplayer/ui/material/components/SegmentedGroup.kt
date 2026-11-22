@@ -2,6 +2,7 @@ package com.oxoghost.hexaplayer.ui.material.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -13,7 +14,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -21,6 +24,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
+import com.oxoghost.hexaplayer.ui.material.motion.pressScale
 import com.oxoghost.hexaplayer.ui.tokens.DesignTokens.Material.Metrics
 import com.oxoghost.hexaplayer.ui.tokens.DesignTokens.Material.Shape as S
 
@@ -51,13 +55,19 @@ fun MSegment(
     gestures: Modifier? = null,
     content: @Composable RowScope.() -> Unit,
 ) {
+    val interaction = remember { MutableInteractionSource() }
     Row(
         modifier
+            .then(if (onClick != null && gestures == null) Modifier.pressScale(interaction, 0.98f) else Modifier)
             .fillMaxWidth()
             .heightIn(min = minHeight.dp)
             .clip(segmentShape(index, count))
             .background(container)
-            .then(gestures ?: if (onClick != null) Modifier.clickable(role = Role.Button, onClick = onClick) else Modifier)
+            .then(
+                gestures ?: if (onClick != null) {
+                    Modifier.clickable(interaction, ripple(), role = Role.Button, onClick = onClick)
+                } else Modifier
+            )
             .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(16.dp),

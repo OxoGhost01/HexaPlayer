@@ -93,7 +93,7 @@ fun MHomeScreen(home: HomeState, playback: PlaybackState, actions: HexaActions, 
                 MListRow(
                     title = p.title,
                     subtitle = "${p.artist} · ${plural(p.plays, "play")}",
-                    modifier = Modifier.padding(horizontal = 8.dp),
+                    modifier = Modifier.animateItem().padding(horizontal = 8.dp),
                     playing = playback.song?.id == song.id,
                     onClick = { actions.play(songs, songs.indexOf(song), "most played") },
                     onLongClick = { actions.songMenu(song) },
@@ -104,7 +104,7 @@ fun MHomeScreen(home: HomeState, playback: PlaybackState, actions: HexaActions, 
         if (home.recentSongs.isNotEmpty()) {
             item { SectionTitle("New songs", onSeeAll = onSeeAllRecent) }
             itemsIndexed(home.recentSongs.take(5), key = { _, song -> song.id }) { i, song ->
-                SwipeToQueue(onSwipe = { actions.addToQueue(song) }, color = s.primary, modifier = Modifier.padding(horizontal = 8.dp)) {
+                SwipeToQueue(onSwipe = { actions.addToQueue(song) }, color = s.primary, modifier = Modifier.animateItem().padding(horizontal = 8.dp)) {
                     MListRow(
                         title = song.title,
                         subtitle = "${song.artist} · ${formatDuration(song.duration)}",

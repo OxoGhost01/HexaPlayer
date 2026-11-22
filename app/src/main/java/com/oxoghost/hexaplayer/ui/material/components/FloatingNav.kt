@@ -1,11 +1,17 @@
 package com.oxoghost.hexaplayer.ui.material.components
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
 import androidx.compose.animation.shrinkHorizontally
-import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -19,6 +25,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -28,6 +37,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.oxoghost.hexaplayer.ui.common.Symbol
+import com.oxoghost.hexaplayer.ui.material.motion.Motion
 import com.oxoghost.hexaplayer.ui.material.theme.HexaShapes
 import com.oxoghost.hexaplayer.ui.tokens.DesignTokens.Material.Metrics
 
@@ -87,6 +97,9 @@ fun MBottomChrome(
     miniPlayer: (@Composable () -> Unit)? = null,
     nav: @Composable () -> Unit,
 ) {
+    // The last mini player stays drawn while it leaves.
+    var shownMini by remember { mutableStateOf(miniPlayer) }
+    if (miniPlayer != null) shownMini = miniPlayer
     Column(
         modifier
             .fillMaxWidth()
@@ -94,7 +107,12 @@ fun MBottomChrome(
             .padding(start = 12.dp, end = 12.dp, bottom = Metrics.floatingBottomInset.dp),
         verticalArrangement = Arrangement.spacedBy(Metrics.floatingGap.dp),
     ) {
-        miniPlayer?.invoke()
+        AnimatedVisibility(
+            miniPlayer != null,
+            enter = expandVertically(tween(Motion.MEDIUM, easing = Motion.Emphasized), expandFrom = Alignment.Bottom) +
+                fadeIn(tween(Motion.MEDIUM)) + scaleIn(tween(Motion.MEDIUM, easing = Motion.Emphasized), initialScale = 0.9f),
+            exit = shrinkVertically(tween(Motion.SHORT), shrinkTowards = Alignment.Bottom) + fadeOut(tween(Motion.SHORT)),
+        ) { shownMini?.invoke() }
         nav()
     }
 }

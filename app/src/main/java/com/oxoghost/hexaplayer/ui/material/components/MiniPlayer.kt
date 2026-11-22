@@ -1,5 +1,12 @@
 package com.oxoghost.hexaplayer.ui.material.components
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -25,8 +32,12 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.oxoghost.hexaplayer.ui.common.Symbols
+import com.oxoghost.hexaplayer.ui.material.motion.Motion
 import com.oxoghost.hexaplayer.ui.material.theme.HexaShapes
 import com.oxoghost.hexaplayer.ui.tokens.DesignTokens.Material.Metrics
+
+/** What the mini player shows for one song; the old one keeps its own cover while it slides out. */
+private class MiniContent(val key: Any?, val title: String, val artist: String, val cover: @Composable () -> Unit)
 
 /**
  * Floating mini player: 52 dp cover, title and artist, play/pause in a circular progress ring,
@@ -42,6 +53,8 @@ fun MMiniPlayer(
     onPlayPause: () -> Unit,
     onNext: () -> Unit,
     modifier: Modifier = Modifier,
+    /** Changes with the song, so the cover and text slide to the new one. */
+    key: Any? = title,
     cover: @Composable () -> Unit,
 ) {
     val s = MaterialTheme.colorScheme
@@ -63,10 +76,23 @@ fun MMiniPlayer(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Box(Modifier.size(52.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(18.dp))) { cover() }
-            Column(Modifier.weight(1f)) {
-                Text(title, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(artist, color = s.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium.copy(fontSize = MaterialTheme.typography.labelMedium.fontSize), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            AnimatedContent(
+                MiniContent(key, title, artist, cover),
+                Modifier.weight(1f),
+                contentKey = { it.key },
+                transitionSpec = {
+                    (slideInVertically(tween(Motion.MEDIUM, easing = Motion.Emphasized)) { it / 2 } + fadeIn(tween(Motion.SHORT)))
+                        .togetherWith(slideOutVertically(tween(Motion.SHORT, easing = Motion.EmphasizedAccelerate)) { -it / 2 } + fadeOut(tween(Motion.SHORT / 2)))
+                },
+                label = "mini",
+            ) { shown ->
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Box(Modifier.size(52.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(18.dp))) { shown.cover() }
+                    Column(Modifier.weight(1f)) {
+                        Text(shown.title, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(shown.artist, color = s.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium.copy(fontSize = MaterialTheme.typography.labelMedium.fontSize), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
             }
         }
         Box(Modifier.size(52.dp), contentAlignment = Alignment.Center) {

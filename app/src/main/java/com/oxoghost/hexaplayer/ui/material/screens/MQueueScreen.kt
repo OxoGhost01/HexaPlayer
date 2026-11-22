@@ -120,6 +120,8 @@ private fun LazyListScope.group(
         val dragging = reorder.isDragging(name, i)
         Row(
             Modifier
+                // Fades only: dragging places the rows itself.
+                .animateItem(placementSpec = null)
                 .reorderItem(reorder, name, i)
                 .padding(bottom = 2.dp)
                 .fillMaxWidth()

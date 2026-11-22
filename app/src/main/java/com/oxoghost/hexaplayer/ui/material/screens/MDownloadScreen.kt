@@ -1,6 +1,14 @@
 package com.oxoghost.hexaplayer.ui.material.screens
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.MutableTransitionState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -17,7 +25,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -26,6 +36,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
@@ -46,6 +57,7 @@ import com.oxoghost.hexaplayer.ui.material.components.MSegment
 import com.oxoghost.hexaplayer.ui.material.components.MSegmentedGroup
 import com.oxoghost.hexaplayer.ui.material.components.MSwitch
 import com.oxoghost.hexaplayer.ui.material.components.MTextField
+import com.oxoghost.hexaplayer.ui.material.motion.Motion
 import com.oxoghost.hexaplayer.ui.state.DownloadActions
 import com.oxoghost.hexaplayer.ui.state.DownloadState
 import com.oxoghost.hexaplayer.ui.state.DownloaderStatus
@@ -122,8 +134,8 @@ fun MDownloadScreen(state: DownloadState, actions: DownloadActions) {
                 MSectionLabel("Downloads", Modifier.weight(1f))
                 if (state.hasFinished) MPillButton("Clear done", actions::clearFinished, style = MButtonStyle.Text, size = MButtonSize.S)
             }
-            MSegmentedGroup {
-                state.jobs.forEachIndexed { i, job -> JobSegment(i, state.jobs.size, job, actions) }
+            MSegmentedGroup(Modifier.animateContentSize(tween(Motion.MEDIUM, easing = Motion.Emphasized))) {
+                state.jobs.forEachIndexed { i, job -> key(job.job.id) { AppearingJob { JobSegment(i, state.jobs.size, job, actions) } } }
             }
         }
         if (state.syncs.isNotEmpty()) {
@@ -174,6 +186,16 @@ private fun StatusCard(state: DownloadState, actions: DownloadActions) {
     }
 }
 
+/** A new job slides in under the others instead of popping up. */
+@Composable
+private fun AppearingJob(content: @Composable () -> Unit) {
+    val visible = remember { MutableTransitionState(false).apply { targetState = true } }
+    AnimatedVisibility(
+        visible,
+        enter = expandVertically(tween(Motion.MEDIUM, easing = Motion.Emphasized)) + fadeIn(tween(Motion.MEDIUM)),
+    ) { content() }
+}
+
 @Composable
 private fun JobSegment(index: Int, count: Int, job: JobView, actions: DownloadActions) {
     val s = MaterialTheme.colorScheme
@@ -190,8 +212,17 @@ private fun JobSegment(index: Int, count: Int, job: JobView, actions: DownloadAc
                     .filter { it.isNotEmpty() }.joinToString(" · ")
             } else job.detail
             Text(line, color = s.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            if (!job.running && job.job.serverFailed > 0) {
+                Text(
+                    if (job.job.serverFailed == 1) "See the failed song" else "See the ${job.job.serverFailed} failed songs",
+                    Modifier.clip(RoundedCornerShape(8.dp)).clickable(role = Role.Button) { actions.showFailed(job.job) }.padding(vertical = 4.dp),
+                    color = s.error,
+                    style = MaterialTheme.typography.labelLarge,
+                )
+            }
+            val fraction by animateFloatAsState(job.fraction, tween(Motion.LONG, easing = Motion.Emphasized), label = "job")
             if (job.matching) MLinearProgressIndeterminate(Modifier.fillMaxWidth().padding(top = 6.dp))
-            else if (job.running) MLinearProgress(job.fraction, Modifier.fillMaxWidth().padding(top = 6.dp))
+            else if (job.running) MLinearProgress(fraction, Modifier.fillMaxWidth().padding(top = 6.dp))
         }
         if (job.running) {
             MCircleButton(Symbols.Stop, "Stop ${job.job.label}", { actions.stopJob(job.job) }, container = s.surfaceContainerHigh, content = s.onSurface, size = 48.dp)

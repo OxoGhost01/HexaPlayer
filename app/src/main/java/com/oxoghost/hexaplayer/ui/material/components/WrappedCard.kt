@@ -2,6 +2,7 @@ package com.oxoghost.hexaplayer.ui.material.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -13,26 +14,31 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
+import com.oxoghost.hexaplayer.ui.material.motion.pressScale
 import com.oxoghost.hexaplayer.ui.material.theme.HexaShapes
 
 /** Home Wrapped card: tertiaryContainer, 104 dp, flat decorative shapes in tertiary. */
 @Composable
 fun MWrappedCard(title: String, subtitle: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val s = MaterialTheme.colorScheme
+    val interaction = remember { MutableInteractionSource() }
     Box(
         modifier
+            .pressScale(interaction, 0.97f)
             .fillMaxWidth()
             .height(104.dp)
             .clip(HexaShapes.card)
             .background(s.tertiaryContainer)
-            .clickable(role = Role.Button, onClick = onClick),
+            .clickable(interaction, ripple(), role = Role.Button, onClick = onClick),
     ) {
         Box(
             Modifier

@@ -1,8 +1,18 @@
 package com.oxoghost.hexaplayer.ui.material.screens
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,10 +27,15 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -30,13 +45,15 @@ import com.oxoghost.hexaplayer.ui.common.albumKey
 import com.oxoghost.hexaplayer.ui.common.artModel
 import com.oxoghost.hexaplayer.ui.common.format
 import com.oxoghost.hexaplayer.ui.common.formatDuration
-import com.oxoghost.hexaplayer.ui.common.horizontalSwipe
 import com.oxoghost.hexaplayer.ui.common.rememberCountdown
 import com.oxoghost.hexaplayer.ui.material.components.MCircleButton
 import com.oxoghost.hexaplayer.ui.material.components.MPlayerControls
 import com.oxoghost.hexaplayer.ui.material.components.MPlayerToolbar
 import com.oxoghost.hexaplayer.ui.material.components.MRepeat
 import com.oxoghost.hexaplayer.ui.material.components.MWavySeek
+import com.oxoghost.hexaplayer.ui.material.motion.Motion
+import com.oxoghost.hexaplayer.ui.material.motion.rememberSwipeState
+import com.oxoghost.hexaplayer.ui.material.motion.swipeGestures
 import com.oxoghost.hexaplayer.ui.material.theme.HexaShapes
 import com.oxoghost.hexaplayer.ui.state.HexaActions
 import com.oxoghost.hexaplayer.ui.state.PlaybackState
@@ -47,9 +64,23 @@ fun MPlayerScreen(playback: PlaybackState, actions: HexaActions, onAlbum: () -> 
     val s = MaterialTheme.colorScheme
     val song = playback.song
     val sleepLeft = rememberCountdown(playback.sleepEndsAt)
+    val swipe = rememberSwipeState()
+    // A swipe already moved the cover out and back in, so the song change itself only swaps it.
+    var bySwipe by remember { mutableStateOf(false) }
+    LaunchedEffect(song?.id) { bySwipe = false }
     Column(
         Modifier
             .fillMaxSize()
+            .graphicsLayer {
+                // Dragging down to close: the screen follows the finger and shrinks a little.
+                val y = swipe.y.value.coerceAtLeast(0f)
+                val f = (y / size.height).coerceIn(0f, 1f)
+                translationY = y
+                scaleX = 1f - f * 0.1f
+                scaleY = 1f - f * 0.1f
+                shape = RoundedCornerShape((f * 160).dp)
+                clip = f > 0f
+            }
             .background(s.surface)
             .systemBarsPadding()
             .padding(horizontal = 16.dp),
@@ -72,36 +103,69 @@ fun MPlayerScreen(playback: PlaybackState, actions: HexaActions, onAlbum: () -> 
             Text("Nothing is playing", Modifier.padding(24.dp), color = s.onSurfaceVariant)
             return@Column
         }
+        val current = song to playback.queueIndex
         Box(
             Modifier
                 .padding(horizontal = 8.dp, vertical = 12.dp)
                 .fillMaxWidth()
                 .aspectRatio(1f)
-                .horizontalSwipe(onLeft = actions::next, onRight = actions::previous)
-                .pointerInput(Unit) {
-                    var total = 0f
-                    detectVerticalDragGestures(onDragStart = { total = 0f }, onDragEnd = { if (total > 120.dp.toPx()) actions.back() }) { _, d -> total += d }
+                .swipeGestures(
+                    swipe,
+                    onLeft = { bySwipe = true; actions.next() },
+                    onRight = { bySwipe = true; actions.previous() },
+                    onDown = actions::back,
+                )
+                .graphicsLayer {
+                    translationX = swipe.x.value
+                    rotationZ = swipe.x.value / size.width * 6f
                 }
         ) {
-            CoverImage(song.artModel, song.albumKey, Modifier.fillMaxSize(), HexaShapes.coverPlayer, "Cover of ${song.album}")
+            AnimatedContent(
+                current,
+                contentKey = { it.first.id },
+                transitionSpec = {
+                    if (bySwipe) EnterTransition.None togetherWith ExitTransition.None
+                    else {
+                        val forward = targetState.second >= initialState.second
+                        val dir = if (forward) 1 else -1
+                        (slideInHorizontally(tween(Motion.MEDIUM, easing = Motion.Emphasized)) { it * dir } + fadeIn(tween(Motion.SHORT)))
+                            .togetherWith(slideOutHorizontally(tween(Motion.MEDIUM, easing = Motion.Emphasized)) { -it * dir / 2 } +
+                                fadeOut(tween(Motion.SHORT)) + scaleOut(tween(Motion.MEDIUM), targetScale = 0.9f))
+                    }
+                },
+                label = "cover",
+            ) { (shown, _) ->
+                CoverImage(shown.artModel, shown.albumKey, Modifier.fillMaxSize(), HexaShapes.coverPlayer, "Cover of ${shown.album}")
+            }
         }
         Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text(song.title, style = MaterialTheme.typography.headlineLarge, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                Text(
-                    song.artist,
-                    Modifier.clickable(onClickLabel = "Open artist") { actions.openArtist(song.artist) },
-                    color = s.onSurfaceVariant,
-                    style = MaterialTheme.typography.bodyLarge,
-                )
-                Text(
-                    song.album,
-                    Modifier.clickable(onClickLabel = "Open album", onClick = onAlbum),
-                    color = s.onSurfaceVariant,
-                    style = MaterialTheme.typography.bodyMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+            AnimatedContent(
+                song,
+                Modifier.weight(1f),
+                contentKey = { it.id },
+                transitionSpec = {
+                    (fadeIn(tween(Motion.MEDIUM, delayMillis = 60)) + slideInVertically(tween(Motion.MEDIUM, easing = Motion.Emphasized)) { it / 4 })
+                        .togetherWith(fadeOut(tween(Motion.SHORT / 2)))
+                },
+                label = "title",
+            ) { shown ->
+                Column {
+                    Text(shown.title, style = MaterialTheme.typography.headlineLarge, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Text(
+                        shown.artist,
+                        Modifier.clickable(onClickLabel = "Open artist") { actions.openArtist(shown.artist) },
+                        color = s.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodyLarge,
+                    )
+                    Text(
+                        shown.album,
+                        Modifier.clickable(onClickLabel = "Open album", onClick = onAlbum),
+                        color = s.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodyMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
             if (song.format.isNotEmpty()) {
                 Text(

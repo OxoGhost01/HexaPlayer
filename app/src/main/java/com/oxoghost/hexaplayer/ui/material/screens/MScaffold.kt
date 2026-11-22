@@ -1,5 +1,11 @@
 package com.oxoghost.hexaplayer.ui.material.screens
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -19,9 +25,14 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -34,13 +45,15 @@ import com.oxoghost.hexaplayer.ui.common.Symbols
 import com.oxoghost.hexaplayer.ui.common.albumKey
 import com.oxoghost.hexaplayer.ui.common.artModel
 import com.oxoghost.hexaplayer.ui.common.formatDuration
-import com.oxoghost.hexaplayer.ui.common.horizontalSwipe
 import com.oxoghost.hexaplayer.ui.common.rowGestures
 import com.oxoghost.hexaplayer.ui.material.components.MBottomChrome
 import com.oxoghost.hexaplayer.ui.material.components.MFloatingNav
 import com.oxoghost.hexaplayer.ui.material.components.MListRow
 import com.oxoghost.hexaplayer.ui.material.components.MMiniPlayer
 import com.oxoghost.hexaplayer.ui.material.components.MNavItem
+import com.oxoghost.hexaplayer.ui.material.motion.Motion
+import com.oxoghost.hexaplayer.ui.material.motion.rememberSwipeState
+import com.oxoghost.hexaplayer.ui.material.motion.swipeGestures
 import com.oxoghost.hexaplayer.ui.material.theme.HexaShapes
 import com.oxoghost.hexaplayer.ui.nav.Routes
 import com.oxoghost.hexaplayer.ui.state.HexaActions
@@ -74,15 +87,29 @@ fun chromePadding(route: String?, playback: PlaybackState): Dp {
 /** Floating mini player and nav; while songs are selected, the selection toolbar instead. */
 @Composable
 fun MAppChrome(route: String?, playback: PlaybackState, actions: HexaActions, modifier: Modifier = Modifier) {
-    if (!showsMaterialChrome(route)) return
+    // Slides away under full screens (player, settings) instead of vanishing.
+    var lastRoute by remember { mutableStateOf(route) }
+    if (showsMaterialChrome(route)) lastRoute = route
+    AnimatedVisibility(
+        showsMaterialChrome(route),
+        modifier,
+        enter = slideInVertically(tween(Motion.MEDIUM, easing = Motion.EmphasizedDecelerate)) { it } + fadeIn(tween(Motion.SHORT)),
+        exit = slideOutVertically(tween(Motion.SHORT, easing = Motion.EmphasizedAccelerate)) { it } + fadeOut(tween(Motion.SHORT)),
+    ) {
+        ChromeContent(lastRoute, playback, actions)
+    }
+}
+
+@Composable
+private fun ChromeContent(route: String?, playback: PlaybackState, actions: HexaActions) {
     val selection = LocalSelection.current
     if (selection.active) {
-        MBottomChrome(modifier) { SelectionToolbar(actions) }
+        MBottomChrome { SelectionToolbar(actions) }
         return
     }
     val song = playback.song
+    val swipe = rememberSwipeState()
     MBottomChrome(
-        modifier,
         miniPlayer = song?.let {
             {
                 MMiniPlayer(
@@ -93,7 +120,14 @@ fun MAppChrome(route: String?, playback: PlaybackState, actions: HexaActions, mo
                     onOpen = actions::openPlayer,
                     onPlayPause = actions::togglePlayPause,
                     onNext = actions::next,
-                    modifier = Modifier.horizontalSwipe(onLeft = actions::next, onRight = actions::previous),
+                    modifier = Modifier
+                        .swipeGestures(swipe, onLeft = actions::next, onRight = actions::previous, onUp = actions::openPlayer)
+                        .graphicsLayer {
+                            translationX = swipe.x.value
+                            translationY = swipe.y.value.coerceAtMost(0f) / 2
+                            alpha = 1f - (kotlin.math.abs(swipe.x.value) / size.width).coerceIn(0f, 0.6f)
+                        },
+                    key = it.id,
                 ) { CoverImage(it.artModel, it.albumKey, Modifier.fillMaxSize()) }
             }
         },
@@ -193,10 +227,11 @@ fun MSongRow(
     onPlay: () -> Unit,
     subtitle: String = "${song.artist} · ${formatDuration(song.duration)}",
     playlist: Playlist? = null,
+    modifier: Modifier = Modifier,
 ) {
     val selection = LocalSelection.current
     val selecting = selection.active && selection.pool == pool
-    SwipeToQueue(onSwipe = { actions.addToQueue(song) }, color = MaterialTheme.colorScheme.primary) {
+    SwipeToQueue(onSwipe = { actions.addToQueue(song) }, color = MaterialTheme.colorScheme.primary, modifier = modifier) {
         MListRow(
             title = song.title,
             subtitle = subtitle,

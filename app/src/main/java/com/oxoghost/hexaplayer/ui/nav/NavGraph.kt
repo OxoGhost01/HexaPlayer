@@ -1,12 +1,18 @@
 package com.oxoghost.hexaplayer.ui.nav
 
+import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.navigation.NamedNavArgument
+import androidx.navigation.NavBackStackEntry
+import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -16,6 +22,9 @@ import com.oxoghost.hexaplayer.repository.Period
 import com.oxoghost.hexaplayer.repository.PeriodKind
 import com.oxoghost.hexaplayer.ui.app.AppTools
 import com.oxoghost.hexaplayer.ui.common.rememberAlbumSeed
+import com.oxoghost.hexaplayer.ui.material.motion.LocalNavAnimatedScope
+import com.oxoghost.hexaplayer.ui.material.motion.LocalSharedTransition
+import com.oxoghost.hexaplayer.ui.material.motion.Motion
 import com.oxoghost.hexaplayer.ui.material.screens.MAppearanceScreen
 import com.oxoghost.hexaplayer.ui.material.screens.MDetailScreen
 import com.oxoghost.hexaplayer.ui.material.screens.MDownloadScreen
@@ -98,42 +107,55 @@ fun HexaNavHost(
         Unit
     }
 
+    // Material motion in the material skin; the terminal keeps its quick 120 ms fade.
+    SharedTransitionLayout(modifier) {
+    CompositionLocalProvider(LocalSharedTransition provides if (terminal) null else this) {
     NavHost(
         nav,
         startDestination = Routes.HOME,
-        modifier = modifier,
-        enterTransition = { fadeIn(tween(120)) },
-        exitTransition = { fadeOut(tween(120)) },
+        modifier = Modifier.fillMaxSize(),
+        enterTransition = {
+            if (terminal) fadeIn(tween(120)) else Motion.enter(initialState.destination.route, targetState.destination.route)
+        },
+        exitTransition = {
+            if (terminal) fadeOut(tween(120)) else Motion.exit(initialState.destination.route, targetState.destination.route)
+        },
+        popEnterTransition = {
+            if (terminal) fadeIn(tween(120)) else Motion.popEnter(initialState.destination.route, targetState.destination.route)
+        },
+        popExitTransition = {
+            if (terminal) fadeOut(tween(120)) else Motion.popExit(initialState.destination.route, targetState.destination.route)
+        },
     ) {
-        composable(Routes.HOME) {
+        screen(Routes.HOME) {
             val home = rememberHomeState(vm)
             if (terminal) THomeScreen(home, listPlayback, actions)
             else MHomeScreen(home, listPlayback, actions, onSeeAllRecent = {
                 ui.section = LibrarySection.Songs
-                ui.sorts[LibrarySection.Songs] = SortKey.DateAdded
+                ui.setSort(LibrarySection.Songs, SortKey.DateAdded)
                 actions.openTab(Tab.Library)
             })
         }
-        composable(Routes.LIBRARY) {
+        screen(Routes.LIBRARY) {
             val lib = rememberLibraryState(vm, ui)
             if (terminal) TLibraryScreen(lib, listPlayback, actions, settings.pixelCovers)
             else MLibraryScreen(lib, listPlayback, actions)
         }
-        composable(Routes.SEARCH) {
+        screen(Routes.SEARCH) {
             val search = rememberSearchState(vm, ui)
             if (terminal) TSearchScreen(search, listPlayback, actions)
             else MSearchScreen(search, listPlayback, actions)
         }
-        composable(Routes.DOWNLOAD) {
+        screen(Routes.DOWNLOAD) {
             val context = LocalContext.current
             val state = rememberDownloadState(context, tools.downloadVm, tools.download)
             if (terminal) TDownloadScreen(state, tools.download) else MDownloadScreen(state, tools.download)
         }
-        composable(Routes.SETUP) {
+        screen(Routes.SETUP) {
             val state = rememberSetupState(LocalContext.current, tools.downloadVm)
             if (terminal) TSetupScreen(state, tools.download, actions::back) else MSetupScreen(state, tools.download, actions::back)
         }
-        composable(Routes.PLAYER) {
+        screen(Routes.PLAYER) {
             if (terminal) {
                 TPlayerScreen(playback, actions, settings.pixelCovers, onAlbum = openCurrentAlbum)
             } else {
@@ -144,16 +166,16 @@ fun HexaNavHost(
                 }
             }
         }
-        composable(Routes.LYRICS) {
+        screen(Routes.LYRICS) {
             val lyrics = rememberLyricsState(vm, playback)
             if (terminal) TLyricsScreen(lyrics, playback, actions, settings.pixelCovers)
             else MLyricsScreen(lyrics, playback, actions)
         }
-        composable(Routes.QUEUE) {
+        screen(Routes.QUEUE) {
             val queue = rememberQueueState(vm, playback)
             if (terminal) TQueueScreen(queue, actions) else MQueueScreen(queue, actions)
         }
-        composable(Routes.SETTINGS) {
+        screen(Routes.SETTINGS) {
             val state = rememberSettingsState(settings, vm, tools.settings)
             if (terminal) {
                 val eq = rememberEqualizerModel()
@@ -162,18 +184,18 @@ fun HexaNavHost(
                 MSettingsScreen(state, tools.settings, actions::back, actions::openSettingsPage, actions::openAppearance, actions::openEqualizer)
             }
         }
-        composable(Routes.SETTINGS_PAGE, listOf(navArgument("page") { type = NavType.StringType })) { entry ->
+        screen(Routes.SETTINGS_PAGE, listOf(navArgument("page") { type = NavType.StringType })) { entry ->
             val page = SettingsPage.entries.firstOrNull { it.name == entry.arguments?.getString("page") } ?: SettingsPage.About
             val state = rememberSettingsState(settings, vm, tools.settings)
             val download = rememberDownloadState(LocalContext.current, tools.downloadVm, tools.download)
             MSettingsPageScreen(page, state, tools.settings, download, tools.download, actions::back, actions::openSettingsPage)
         }
-        composable(Routes.APPEARANCE) {
+        screen(Routes.APPEARANCE) {
             val state = rememberSettingsState(settings, vm, tools.settings)
             if (terminal) TAppearanceScreen(state, tools.settings, actions::openFlavorEditor, actions::back)
             else MAppearanceScreen(state, tools.settings, playback, actions::back)
         }
-        composable(Routes.FLAVOR, listOf(navArgument("name") { type = NavType.StringType; nullable = true; defaultValue = null })) { entry ->
+        screen(Routes.FLAVOR, listOf(navArgument("name") { type = NavType.StringType; nullable = true; defaultValue = null })) { entry ->
             val editing = entry.arguments?.getString("name")?.takeIf { it in settings.customFlavors }
             val base = remember(editing) { TerminalPalettes.get(editing ?: settings.terminalPalette, false, settings.customFlavors) }
             TFlavorEditorScreen(
@@ -191,7 +213,7 @@ fun HexaNavHost(
                 onBack = actions::back,
             )
         }
-        composable(Routes.WRAPPED) {
+        screen(Routes.WRAPPED) {
             val context = LocalContext.current
             val (period, setPeriod) = rememberWrappedPeriod()
             val state = rememberWrappedState(vm, period)
@@ -205,20 +227,20 @@ fun HexaNavHost(
             if (terminal) TWrappedScreen(state, wrapped, settings.pixelCovers, actions::back)
             else MWrappedScreen(state, wrapped, actions::back)
         }
-        composable(Routes.EQUALIZER) {
+        screen(Routes.EQUALIZER) {
             val eq = rememberEqualizerModel()
             if (terminal) TEqualizerScreen(eq.state, eq, actions::back) else MEqualizerScreen(eq.state, eq, actions::back)
         }
-        composable(Routes.ALBUM, listOf(navArgument("id") { type = NavType.LongType })) { entry ->
+        screen(Routes.ALBUM, listOf(navArgument("id") { type = NavType.LongType })) { entry ->
             Detail(DetailKey.AlbumKey(entry.arguments?.getLong("id") ?: -1L), terminal, settings, vm, actions, listPlayback)
         }
-        composable(Routes.ARTIST, listOf(navArgument("name") { type = NavType.StringType })) { entry ->
+        screen(Routes.ARTIST, listOf(navArgument("name") { type = NavType.StringType })) { entry ->
             Detail(DetailKey.ArtistKey(entry.arguments?.getString("name").orEmpty()), terminal, settings, vm, actions, listPlayback)
         }
-        composable(Routes.PLAYLIST, listOf(navArgument("id") { type = NavType.StringType })) { entry ->
+        screen(Routes.PLAYLIST, listOf(navArgument("id") { type = NavType.StringType })) { entry ->
             Detail(DetailKey.PlaylistKey(entry.arguments?.getString("id").orEmpty()), terminal, settings, vm, actions, listPlayback)
         }
-        composable(Routes.EDIT, listOf(navArgument("ids") { type = NavType.StringType })) { entry ->
+        screen(Routes.EDIT, listOf(navArgument("ids") { type = NavType.StringType })) { entry ->
             val ids = remember(entry) { entry.arguments?.getString("ids").orEmpty().split(',').mapNotNull { it.toLongOrNull() } }
             val edit = rememberEditState(vm, ids)
             if (terminal) {
@@ -228,6 +250,17 @@ fun HexaNavHost(
             }
         }
     }
+    }
+    }
+}
+
+/** A destination that tells its content which transition it is in, for [sharedCover]. */
+private fun NavGraphBuilder.screen(
+    route: String,
+    arguments: List<NamedNavArgument> = emptyList(),
+    content: @Composable (NavBackStackEntry) -> Unit,
+) = composable(route, arguments) { entry ->
+    CompositionLocalProvider(LocalNavAnimatedScope provides this) { content(entry) }
 }
 
 @Composable

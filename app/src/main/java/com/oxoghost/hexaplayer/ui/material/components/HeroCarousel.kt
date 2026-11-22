@@ -2,6 +2,7 @@ package com.oxoghost.hexaplayer.ui.material.components
 
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,6 +17,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -26,6 +28,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.oxoghost.hexaplayer.ui.material.motion.pressScale
 
 /**
  * Multi-browse carousel: the first visible item is large (176 dp), the next medium (112), the
@@ -57,11 +60,13 @@ fun <T> MHeroCarousel(
             }
             val size by animateDpAsState(target, label = "carousel")
             Column(Modifier.width(size)) {
+                val interaction = remember { MutableInteractionSource() }
                 Box(
                     Modifier
+                        .pressScale(interaction)
                         .size(size)
                         .clip(RoundedCornerShape(minOf(28.dp, size / 2)))
-                        .clickable(role = Role.Button, onClickLabel = title(item)) { onClick(item) }
+                        .clickable(interaction, ripple(), role = Role.Button, onClickLabel = title(item)) { onClick(item) }
                 ) { cover(item) }
                 if (i == first) {
                     Text(

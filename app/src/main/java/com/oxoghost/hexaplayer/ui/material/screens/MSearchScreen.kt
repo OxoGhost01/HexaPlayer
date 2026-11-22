@@ -111,7 +111,7 @@ private fun LazyListScope.results(search: SearchState, playback: PlaybackState, 
         item { MSectionLabel("Songs", Modifier.padding(top = 8.dp)) }
         itemsIndexed(search.songs, key = { _, song -> "s${song.id}" }) { i, song ->
             val s = MaterialTheme.colorScheme
-            SwipeToQueue(onSwipe = { actions.addToQueue(song) }, color = s.primary, modifier = Modifier.padding(bottom = 2.dp)) {
+            SwipeToQueue(onSwipe = { actions.addToQueue(song) }, color = s.primary, modifier = Modifier.animateItem().padding(bottom = 2.dp)) {
                 MSegment(i, search.songs.size, onClick = {
                     actions.commitSearch()
                     actions.play(search.songs, i, "search · $q")
@@ -129,7 +129,7 @@ private fun LazyListScope.results(search: SearchState, playback: PlaybackState, 
     if (search.albums.isNotEmpty()) {
         item { MSectionLabel("Albums", Modifier.padding(top = 16.dp)) }
         itemsIndexed(search.albums, key = { _, a -> "a${a.id}" }) { i, album ->
-            ResultRow(i, search.albums.size, highlight(album.title, q, MaterialTheme.colorScheme.primary), "${album.artist} · ${album.songs.size} songs", {
+            ResultRow(i, search.albums.size, highlight(album.title, q, MaterialTheme.colorScheme.primary), "${album.artist} · ${album.songs.size} songs", Modifier.animateItem(), {
                 CoverImage(album.artModel, album.albumKey, Modifier.size(44.dp), HexaShapes.coverList)
             }) {
                 actions.commitSearch()
@@ -141,7 +141,7 @@ private fun LazyListScope.results(search: SearchState, playback: PlaybackState, 
         item { MSectionLabel("Artists", Modifier.padding(top = 16.dp)) }
         itemsIndexed(search.artists, key = { _, a -> "r${a.name}" }) { i, artist ->
             val first = artist.songs.firstOrNull()
-            ResultRow(i, search.artists.size, highlight(artist.name, q, MaterialTheme.colorScheme.primary), "${artist.songs.size} songs", {
+            ResultRow(i, search.artists.size, highlight(artist.name, q, MaterialTheme.colorScheme.primary), "${artist.songs.size} songs", Modifier.animateItem(), {
                 CoverImage(first?.artModel, first?.albumKey, Modifier.size(44.dp), CircleShape)
             }) {
                 actions.commitSearch()
@@ -153,7 +153,7 @@ private fun LazyListScope.results(search: SearchState, playback: PlaybackState, 
         item { MSectionLabel("Lyrics", Modifier.padding(top = 16.dp)) }
         itemsIndexed(search.lyrics, key = { _, hit -> "l${hit.song.id}" }) { i, hit ->
             val s = MaterialTheme.colorScheme
-            MSegment(i, search.lyrics.size, Modifier.padding(bottom = 2.dp), onClick = {
+            MSegment(i, search.lyrics.size, Modifier.animateItem().padding(bottom = 2.dp), onClick = {
                 actions.commitSearch()
                 actions.play(search.lyrics.map { it.song }, i, "search · $q")
             }) {
@@ -182,11 +182,12 @@ private fun ResultRow(
     count: Int,
     title: androidx.compose.ui.text.AnnotatedString,
     subtitle: String,
+    modifier: Modifier,
     leading: @Composable () -> Unit,
     onClick: () -> Unit,
 ) {
     val s = MaterialTheme.colorScheme
-    MSegment(index, count, Modifier.padding(bottom = 2.dp), onClick = onClick) {
+    MSegment(index, count, modifier.padding(bottom = 2.dp), onClick = onClick) {
         leading()
         Column(Modifier.weight(1f)) {
             Text(title, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)

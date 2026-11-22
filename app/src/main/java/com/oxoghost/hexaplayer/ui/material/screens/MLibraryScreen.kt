@@ -6,6 +6,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -28,11 +29,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -53,24 +52,25 @@ import com.oxoghost.hexaplayer.ui.common.albumKey
 import com.oxoghost.hexaplayer.ui.common.artModel
 import com.oxoghost.hexaplayer.ui.common.formatDuration
 import com.oxoghost.hexaplayer.ui.common.formatSize
+import com.oxoghost.hexaplayer.ui.common.pinchSteps
 import com.oxoghost.hexaplayer.ui.material.components.MCircleButton
 import com.oxoghost.hexaplayer.ui.material.components.MIconButton
 import com.oxoghost.hexaplayer.ui.material.components.MListRow
 import com.oxoghost.hexaplayer.ui.material.components.MSegment
 import com.oxoghost.hexaplayer.ui.material.components.MTabChips
 import com.oxoghost.hexaplayer.ui.material.components.MTopRow
+import com.oxoghost.hexaplayer.ui.material.motion.pressScale
+import com.oxoghost.hexaplayer.ui.material.motion.sharedCover
 import com.oxoghost.hexaplayer.ui.material.theme.HexaShapes
 import com.oxoghost.hexaplayer.ui.state.HexaActions
 import com.oxoghost.hexaplayer.ui.state.LibrarySection
 import com.oxoghost.hexaplayer.ui.state.LibraryState
 import com.oxoghost.hexaplayer.ui.state.PlaybackState
 
-private const val COLS = 6
 private val tabs = listOf("Songs", "Albums", "Artists", "Playlists", "Folders")
 
 @Composable
 fun MLibraryScreen(lib: LibraryState, playback: PlaybackState, actions: HexaActions) {
-    var albumList by rememberSaveable { mutableStateOf(false) }
     BackHandler(enabled = lib.section == LibrarySection.Folders && lib.canGoUp, onBack = actions::folderUp)
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
         MTopRow(onSearch = actions::openSearch, onIdentify = null, onSettings = actions::openSettings)
@@ -79,19 +79,29 @@ fun MLibraryScreen(lib: LibraryState, playback: PlaybackState, actions: HexaActi
             return@Column
         }
         MTabChips(tabs, lib.section.ordinal, { actions.selectSection(LibrarySection.entries[it]) }, modifier = Modifier.padding(vertical = 8.dp))
+        // Albums and playlists get the chosen grid size, artists one more; pinching changes it.
+        val columns = when (lib.section) {
+            LibrarySection.Albums -> if (lib.albumsAsList) 1 else lib.gridColumns
+            LibrarySection.Artists -> lib.gridColumns + 1
+            LibrarySection.Playlists -> lib.gridColumns
+            else -> 1
+        }
+        val zoomable = columns > 1
         LazyVerticalGrid(
-            columns = GridCells.Fixed(COLS),
-            modifier = Modifier.weight(1f),
+            columns = GridCells.Fixed(columns),
+            modifier = Modifier
+                .weight(1f)
+                .then(if (zoomable) Modifier.pinchSteps { actions.setGridColumns(lib.gridColumns - it) } else Modifier),
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = LocalChromePadding.current),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             full {
                 if (lib.section == LibrarySection.Folders) Breadcrumbs(lib, actions)
-                else SortRow(lib, actions, albumList) { albumList = !albumList }
+                else SortRow(lib, actions)
             }
             when (lib.section) {
                 LibrarySection.Songs -> songs(lib.songs, playback, actions) { song, i -> playWithAlbum(song, i, lib, actions) }
-                LibrarySection.Albums -> albums(lib, actions, albumList)
+                LibrarySection.Albums -> albums(lib, actions)
                 LibrarySection.Artists -> artists(lib, actions)
                 LibrarySection.Playlists -> playlists(lib, actions)
                 LibrarySection.Folders -> folders(lib, playback, actions)
@@ -105,10 +115,10 @@ fun MLibraryScreen(lib: LibraryState, playback: PlaybackState, actions: HexaActi
     }
 }
 
-private fun LazyGridScope.full(content: @Composable () -> Unit) = item(span = { GridItemSpan(COLS) }) { content() }
+private fun LazyGridScope.full(content: @Composable () -> Unit) = item(span = { GridItemSpan(maxLineSpan) }) { content() }
 
 @Composable
-private fun SortRow(lib: LibraryState, actions: HexaActions, albumList: Boolean, onToggleAlbums: () -> Unit) {
+private fun SortRow(lib: LibraryState, actions: HexaActions) {
     val s = MaterialTheme.colorScheme
     Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         Row(
@@ -133,8 +143,8 @@ private fun SortRow(lib: LibraryState, actions: HexaActions, albumList: Boolean,
         } else {
             Box(Modifier.weight(1f))
             when (lib.section) {
-                LibrarySection.Albums -> MIconButton(if (albumList) Symbols.Album else Symbols.ViewList,
-                    if (albumList) "Show as grid" else "Show as list", onToggleAlbums)
+                LibrarySection.Albums -> MIconButton(if (lib.albumsAsList) Symbols.Album else Symbols.ViewList,
+                    if (lib.albumsAsList) "Show as grid" else "Show as list", actions::toggleAlbumsAsList)
                 LibrarySection.Playlists -> MIconButton(Symbols.Add, "New playlist", actions::createPlaylist, tint = s.primary)
                 else -> {}
             }
@@ -166,8 +176,8 @@ private fun Breadcrumbs(lib: LibraryState, actions: HexaActions) {
 }
 
 private fun LazyGridScope.songs(songs: List<Song>, playback: PlaybackState, actions: HexaActions, onPlay: (Song, Int) -> Unit) {
-    itemsIndexed(songs, key = { _, s -> "s${s.id}" }, span = { _, _ -> GridItemSpan(COLS) }) { i, song ->
-        MSongRow(song, songs, i, playback, actions, onPlay = { onPlay(song, i) })
+    itemsIndexed(songs, key = { _, s -> "s${s.id}" }, span = { _, _ -> GridItemSpan(maxLineSpan) }) { i, song ->
+        MSongRow(song, songs, i, playback, actions, onPlay = { onPlay(song, i) }, modifier = Modifier.animateItem())
     }
 }
 
@@ -178,41 +188,45 @@ private fun playWithAlbum(song: Song, index: Int, lib: LibraryState, actions: He
 }
 
 @OptIn(ExperimentalFoundationApi::class)
-private fun LazyGridScope.albums(lib: LibraryState, actions: HexaActions, asList: Boolean) {
-    itemsIndexed(lib.albums, key = { _, a -> "a${a.id}" }, span = { _, _ -> GridItemSpan(if (asList) COLS else 3) }) { _, album ->
-        if (asList) {
+private fun LazyGridScope.albums(lib: LibraryState, actions: HexaActions) {
+    itemsIndexed(lib.albums, key = { _, a -> "a${a.id}" }) { _, album ->
+        if (lib.albumsAsList) {
             MListRow(
                 title = album.title,
                 subtitle = "${album.artist} · ${album.songs.size} songs",
+                modifier = Modifier.animateItem(),
                 onClick = { actions.openAlbum(album) },
                 onLongClick = { actions.addToPlaylist(album.songs, album.title) },
-            ) { CoverImage(album.artModel, album.albumKey, Modifier.fillMaxSize(), HexaShapes.coverRow) }
+            ) { CoverImage(album.artModel, album.albumKey, Modifier.fillMaxSize().sharedCover("album:${album.id}"), HexaShapes.coverRow) }
         } else {
             GridTile(
                 title = album.title,
                 subtitle = album.artist,
                 onClick = { actions.openAlbum(album) },
                 onLongClick = { actions.addToPlaylist(album.songs, album.title) },
+                modifier = Modifier.animateItem(),
+                sharedKey = "album:${album.id}",
             ) { CoverImage(album.artModel, album.albumKey, Modifier.fillMaxSize(), HexaShapes.coverGrid) }
         }
     }
 }
 
 private fun LazyGridScope.artists(lib: LibraryState, actions: HexaActions) {
-    itemsIndexed(lib.artists, key = { _, a -> "r${a.name}" }, span = { _, _ -> GridItemSpan(2) }) { _, artist ->
+    itemsIndexed(lib.artists, key = { _, a -> "r${a.name}" }) { _, artist ->
         val first = artist.songs.firstOrNull()
-        GridTile(artist.name, "${artist.songs.size} songs", { actions.openArtist(artist.name) }, null, centered = true) {
+        GridTile(artist.name, "${artist.songs.size} songs", { actions.openArtist(artist.name) }, null, Modifier.animateItem(), centered = true) {
             CoverImage(first?.artModel, first?.albumKey, Modifier.fillMaxSize(), CircleShape)
         }
     }
 }
 
 private fun LazyGridScope.playlists(lib: LibraryState, actions: HexaActions) {
-    item(key = "new", span = { GridItemSpan(3) }) { NewPlaylistTile(actions::createPlaylist) }
-    itemsIndexed(lib.playlists, key = { _, p -> "p${p.id}" }, span = { _, _ -> GridItemSpan(3) }) { _, playlist ->
+    item(key = "new") { Box(Modifier.animateItem()) { NewPlaylistTile(actions::createPlaylist) } }
+    itemsIndexed(lib.playlists, key = { _, p -> "p${p.id}" }) { _, playlist ->
         val songs = lib.playlistSongs[playlist.id].orEmpty()
         val first = songs.firstOrNull()
-        GridTile(playlist.name, "${songs.size} songs", { actions.openPlaylist(playlist) }, { actions.editPlaylist(playlist) }) {
+        GridTile(playlist.name, "${songs.size} songs", { actions.openPlaylist(playlist) }, { actions.editPlaylist(playlist) },
+            Modifier.animateItem(), sharedKey = "playlist:${playlist.id}") {
             CoverImage(playlist.coverUri ?: first?.artModel, playlist.coverUri ?: first?.albumKey, Modifier.fillMaxSize(), HexaShapes.coverGrid)
         }
     }
@@ -220,9 +234,9 @@ private fun LazyGridScope.playlists(lib: LibraryState, actions: HexaActions) {
 
 private fun LazyGridScope.folders(lib: LibraryState, playback: PlaybackState, actions: HexaActions) {
     val count = lib.folders.size + lib.folderSongs.size
-    itemsIndexed(lib.folders, key = { _, f -> "f${f.path}" }, span = { _, _ -> GridItemSpan(COLS) }) { i, folder ->
+    itemsIndexed(lib.folders, key = { _, f -> "f${f.path}" }, span = { _, _ -> GridItemSpan(maxLineSpan) }) { i, folder ->
         val s = MaterialTheme.colorScheme
-        MSegment(i, count, Modifier.padding(bottom = 2.dp), onClick = { actions.openFolder(folder.path, folder.name) }) {
+        MSegment(i, count, Modifier.animateItem().padding(bottom = 2.dp), onClick = { actions.openFolder(folder.path, folder.name) }) {
             Box(Modifier.size(44.dp).clip(RoundedCornerShape(14.dp)).background(s.primaryContainer), contentAlignment = Alignment.Center) {
                 Symbol(Symbols.Folder, null, filled = true, tint = s.onPrimaryContainer)
             }
@@ -232,10 +246,10 @@ private fun LazyGridScope.folders(lib: LibraryState, playback: PlaybackState, ac
             }
         }
     }
-    itemsIndexed(lib.folderSongs, key = { _, song -> "fs${song.id}" }, span = { _, _ -> GridItemSpan(COLS) }) { i, song ->
+    itemsIndexed(lib.folderSongs, key = { _, song -> "fs${song.id}" }, span = { _, _ -> GridItemSpan(maxLineSpan) }) { i, song ->
         val s = MaterialTheme.colorScheme
         val index = lib.folders.size + i
-        SwipeToQueue(onSwipe = { actions.addToQueue(song) }, color = s.primary, modifier = Modifier.padding(bottom = 2.dp)) {
+        SwipeToQueue(onSwipe = { actions.addToQueue(song) }, color = s.primary, modifier = Modifier.animateItem().padding(bottom = 2.dp)) {
             MSegment(index, count, onClick = { actions.play(lib.folderSongs, i, "folder · ${lib.folderCrumbs.last()}") },
                 container = if (playback.song?.id == song.id) s.secondaryContainer else s.surfaceContainer) {
                 CoverImage(song.artModel, song.albumKey, Modifier.size(44.dp), HexaShapes.coverList)
@@ -257,18 +271,23 @@ private fun GridTile(
     subtitle: String,
     onClick: () -> Unit,
     onLongClick: (() -> Unit)?,
+    modifier: Modifier = Modifier,
     centered: Boolean = false,
+    /** Same key on the page it opens, so the cover flies there. */
+    sharedKey: String? = null,
     cover: @Composable () -> Unit,
 ) {
     val s = MaterialTheme.colorScheme
+    val interaction = remember { MutableInteractionSource() }
     Column(
-        Modifier
+        modifier
+            .pressScale(interaction)
             .padding(vertical = 8.dp)
             .clip(RoundedCornerShape(20.dp))
-            .combinedClickable(onClick = onClick, onLongClick = onLongClick),
+            .combinedClickable(interaction, ripple(), onClick = onClick, onLongClick = onLongClick),
         horizontalAlignment = if (centered) Alignment.CenterHorizontally else Alignment.Start,
     ) {
-        Box(Modifier.fillMaxWidth().aspectRatio(1f)) { cover() }
+        Box(Modifier.fillMaxWidth().aspectRatio(1f).then(if (sharedKey != null) Modifier.sharedCover(sharedKey) else Modifier)) { cover() }
         Text(title, Modifier.padding(top = 8.dp, start = 4.dp, end = 4.dp), style = MaterialTheme.typography.titleSmall,
             maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = if (centered) TextAlign.Center else TextAlign.Start)
         Text(subtitle, Modifier.padding(horizontal = 4.dp), color = s.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium,
