@@ -15,6 +15,7 @@ import com.oxoghost.hexaplayer.BuildConfig
 import com.oxoghost.hexaplayer.ui.app.SystemAccess
 import com.oxoghost.hexaplayer.ui.app.UpdateCheck
 import com.oxoghost.hexaplayer.ui.app.Updater
+import com.oxoghost.hexaplayer.ui.settings.ColorStyle
 import com.oxoghost.hexaplayer.ui.settings.MaterialSource
 import com.oxoghost.hexaplayer.ui.settings.Skin
 import com.oxoghost.hexaplayer.ui.settings.UiSettings
@@ -64,6 +65,8 @@ data class SettingsState(
     val latestVersion: String?,
     val scanning: Boolean,
     val songCount: Int,
+    /** Albums and playlists per row in the material library. */
+    val gridColumns: Int,
 ) {
     val updateStatus: String
         get() = when (updateCheck) {
@@ -80,6 +83,7 @@ interface SettingsActions {
     fun setTerminalPalette(name: String)
     fun setMaterialSource(source: MaterialSource)
     fun setMaterialPreset(name: String)
+    fun setMaterialStyle(style: ColorStyle)
     fun setPureBlack(on: Boolean)
     fun setTintPlayer(on: Boolean)
     fun setPixelCovers(on: Boolean)
@@ -90,6 +94,7 @@ interface SettingsActions {
     fun rescan()
     fun setSort(index: Int)
     fun setShowUnknown(on: Boolean)
+    fun setGridColumns(columns: Int)
     fun setGapless(on: Boolean)
     fun setResumeOnSkip(on: Boolean)
     fun setCrossfade(tenths: Int)
@@ -107,6 +112,7 @@ interface SettingsActions {
 class SettingsModel(
     private val context: Context,
     private val vm: MusicViewModel,
+    private val ui: UiModel,
     private val repo: UiSettingsRepository,
     private val updater: Updater,
     private val system: SystemAccess,
@@ -133,8 +139,11 @@ class SettingsModel(
             latestVersion = updater.info?.latestVersion,
             scanning = scanning,
             songCount = songCount,
+            gridColumns = this.ui.gridColumns,
         )
     }
+
+    override fun setGridColumns(columns: Int) = ui.changeGridColumns(columns)
 
     private fun changed() {
         revision++
@@ -157,6 +166,10 @@ class SettingsModel(
             repo.setMaterialSource(MaterialSource.Preset)
             repo.setMaterialPreset(name)
         }
+    }
+
+    override fun setMaterialStyle(style: ColorStyle) {
+        scope.launch { repo.setMaterialStyle(style) }
     }
 
     override fun setPureBlack(on: Boolean) {

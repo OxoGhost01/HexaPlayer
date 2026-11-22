@@ -88,8 +88,8 @@ fun HexaApp(
         val tools = remember(nav) {
             AppTools(
                 downloadVm = downloadVm,
-                download = DownloadModel(context, downloadVm, system, actions::openSetup),
-                settings = SettingsModel(context, vm, settingsRepo, updater, system, scope),
+                download = DownloadModel(context, downloadVm, system, ui, actions::openSetup),
+                settings = SettingsModel(context, vm, ui, settingsRepo, updater, system, scope),
             )
         }
 

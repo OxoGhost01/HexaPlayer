@@ -272,6 +272,9 @@ class AppActions(
         ui.cursors[LibrarySection.Folders] = 0
     }
 
+    override fun toggleAlbumsAsList() = ui.toggleAlbumsAsList()
+    override fun setGridColumns(columns: Int) = ui.changeGridColumns(columns)
+
     override fun folderUp() {
         if (ui.folderStack.isNotEmpty()) ui.folderStack.removeAt(ui.folderStack.lastIndex)
         ui.cursors[LibrarySection.Folders] = 0

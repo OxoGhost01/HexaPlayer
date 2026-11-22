@@ -40,6 +40,8 @@ import com.oxoghost.hexaplayer.ui.material.components.MButtonStyle
 import com.oxoghost.hexaplayer.ui.material.components.MCircleButton
 import com.oxoghost.hexaplayer.ui.material.components.MDialog
 import com.oxoghost.hexaplayer.ui.material.components.MPillButton
+import com.oxoghost.hexaplayer.ui.material.components.MConnectedButtonGroup
+import com.oxoghost.hexaplayer.ui.material.components.MGroupOption
 import com.oxoghost.hexaplayer.ui.material.components.MSectionLabel
 import com.oxoghost.hexaplayer.ui.material.components.MSegment
 import com.oxoghost.hexaplayer.ui.material.components.MSegmentedGroup
@@ -50,6 +52,7 @@ import com.oxoghost.hexaplayer.ui.material.components.MThickSlider
 import com.oxoghost.hexaplayer.ui.state.DownloadActions
 import com.oxoghost.hexaplayer.ui.state.DownloadState
 import com.oxoghost.hexaplayer.ui.state.SettingsActions
+import com.oxoghost.hexaplayer.ui.state.UiModel
 import com.oxoghost.hexaplayer.ui.state.SettingsPage
 import com.oxoghost.hexaplayer.ui.state.SettingsState
 import com.oxoghost.hexaplayer.ui.state.librarySorts
@@ -77,7 +80,7 @@ fun MSettingsScreen(
         AppCard(state, actions)
         val rows = listOf(
             Triple(Symbols.Palette, "Appearance", "Theme, colors, pure black") to onAppearance,
-            Triple(Symbols.LibraryMusic, "Library", "Folder, sorting, unknown songs") to { onPage(SettingsPage.Library) },
+            Triple(Symbols.LibraryMusic, "Library", "Folder, sorting, albums per row") to { onPage(SettingsPage.Library) },
             Triple(Symbols.PlayCircle, "Playback", "Gapless, resume, crossfade") to { onPage(SettingsPage.Playback) },
             Triple(Symbols.Equalizer, "Audio", "Equalizer and effects") to onEqualizer,
             Triple(Symbols.Download, "Download & Sync", "Termux, default folder") to { onPage(SettingsPage.Download) },
@@ -195,6 +198,14 @@ private fun ColumnScope.LibraryPage(state: SettingsState, actions: SettingsActio
         }
         SwitchSegment(3, 4, "Show unknown songs", "Tracks with no artist or title", state.showUnknown, actions::setShowUnknown)
     }
+    MSectionLabel("Albums per row", Modifier.padding(top = 8.dp))
+    MConnectedButtonGroup(
+        (UiModel.MIN_COLUMNS..UiModel.MAX_COLUMNS).map { MGroupOption(it.toString()) },
+        state.gridColumns - UiModel.MIN_COLUMNS,
+        { actions.setGridColumns(it + UiModel.MIN_COLUMNS) },
+    )
+    Text("You can also pinch the album, artist and playlist grids.", color = MaterialTheme.colorScheme.onSurfaceVariant,
+        style = MaterialTheme.typography.bodySmall)
     if (state.folder.isNotEmpty()) {
         MPillButton("Scan all audio instead", { actions.setFolder("") }, style = MButtonStyle.Text, size = MButtonSize.M)
     }

@@ -29,6 +29,9 @@ data class LibraryState(
     val loading: Boolean,
     val totalSongs: Int,
     val folder: String,
+    val albumsAsList: Boolean = false,
+    /** Albums and playlists per row (artists get one more). */
+    val gridColumns: Int = 2,
 ) {
     val canGoUp: Boolean get() = folderCrumbs.size > 1
     val itemCount: Int
@@ -115,6 +118,8 @@ fun rememberLibraryState(vm: MusicViewModel, ui: UiModel): LibraryState {
         loading = loading,
         totalSongs = songs.size,
         folder = vm.musicFolder,
+        albumsAsList = ui.albumsAsList,
+        gridColumns = ui.gridColumns,
     )
 }
 

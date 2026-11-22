@@ -144,6 +144,8 @@ interface LibraryActions {
     fun setCursor(section: LibrarySection, index: Int)
     fun openFolder(path: String, name: String)
     fun folderUp()
+    fun toggleAlbumsAsList()
+    fun setGridColumns(columns: Int)
 }
 
 interface SearchActions {

@@ -3,6 +3,7 @@ package com.oxoghost.hexaplayer.ui.state
 import android.app.Application
 import android.content.Context
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
@@ -40,13 +41,37 @@ val LibrarySection.sortKeys: List<SortKey>
         LibrarySection.Folders -> listOf(SortKey.NameAsc, SortKey.NameDesc)
     }
 
-/** UI-only state shared by both skins (section, sorts, folder path, cursors, search). */
+/**
+ * UI-only state shared by both skins (section, sorts, folder path, cursors, search). The library
+ * view (section, sorts, album layout, grid size) is kept across launches.
+ */
 class UiModel(application: Application) : AndroidViewModel(application) {
 
     private val prefs = application.getSharedPreferences("hexa_ui", Context.MODE_PRIVATE)
 
-    var section by mutableStateOf(LibrarySection.Songs)
-    val sorts = mutableStateMapOf<LibrarySection, SortKey>()
+    private var savedSection by mutableStateOf(
+        prefs.getString("section", null)?.let { name -> LibrarySection.entries.firstOrNull { it.name == name } } ?: LibrarySection.Songs
+    )
+    var section: LibrarySection
+        get() = savedSection
+        set(value) {
+            savedSection = value
+            prefs.edit().putString("section", value.name).apply()
+        }
+
+    val sorts = mutableStateMapOf<LibrarySection, SortKey>().apply {
+        LibrarySection.entries.forEach { s ->
+            prefs.getString("sort_${s.name}", null)?.let { name -> s.sortKeys.firstOrNull { it.name == name } }?.let { put(s, it) }
+        }
+    }
+
+    /** Albums as a list instead of a grid. */
+    var albumsAsList by mutableStateOf(prefs.getBoolean("albums_as_list", false))
+        private set
+
+    /** Albums and playlists per row in the material library (artists get one more). */
+    var gridColumns by mutableIntStateOf(prefs.getInt("grid_columns", 2).coerceIn(MIN_COLUMNS, MAX_COLUMNS))
+        private set
     val cursors = mutableStateMapOf<LibrarySection, Int>()
 
     /** Folder stack below the library root: (relative path, display name). */
@@ -72,7 +97,22 @@ class UiModel(application: Application) : AndroidViewModel(application) {
 
     fun cycleSort(s: LibrarySection) {
         val keys = s.sortKeys
-        sorts[s] = keys[(keys.indexOf(sortOf(s)) + 1) % keys.size]
+        setSort(s, keys[(keys.indexOf(sortOf(s)) + 1) % keys.size])
+    }
+
+    fun setSort(s: LibrarySection, key: SortKey) {
+        sorts[s] = key
+        prefs.edit().putString("sort_${s.name}", key.name).apply()
+    }
+
+    fun toggleAlbumsAsList() {
+        albumsAsList = !albumsAsList
+        prefs.edit().putBoolean("albums_as_list", albumsAsList).apply()
+    }
+
+    fun changeGridColumns(columns: Int) {
+        gridColumns = columns.coerceIn(MIN_COLUMNS, MAX_COLUMNS)
+        prefs.edit().putInt("grid_columns", gridColumns).apply()
     }
 
     fun rememberSearch(query: String) {
@@ -102,5 +142,7 @@ class UiModel(application: Application) : AndroidViewModel(application) {
 
     companion object {
         private const val MAX_HISTORY = 10
+        const val MIN_COLUMNS = 2
+        const val MAX_COLUMNS = 4
     }
 }
