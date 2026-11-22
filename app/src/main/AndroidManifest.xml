@@ -103,6 +103,13 @@
                 android:resource="@xml/appwidget_5x1_info"/>
         </receiver>
 
+        <!-- Covers for Android Auto; MusicService grants read access when Auto connects -->
+        <provider
+            android:name=".service.ArtworkProvider"
+            android:authorities="${applicationId}.art"
+            android:exported="false"
+            android:grantUriPermissions="true" />
+
         <!-- FileProvider for sharing downloaded APKs with the package installer -->
         <provider
             android:name="androidx.core.content.FileProvider"

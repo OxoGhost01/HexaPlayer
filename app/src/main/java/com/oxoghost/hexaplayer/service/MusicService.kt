@@ -1,25 +1,27 @@
 package com.oxoghost.hexaplayer.service
 
+import android.app.PendingIntent
 import android.content.BroadcastReceiver
-import android.content.ContentUris
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.database.ContentObserver
 import android.media.AudioManager
-import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.provider.MediaStore
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
-import androidx.media3.common.MediaMetadata
+import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.Timeline
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.CommandButton
 import androidx.media3.session.LibraryResult
+import androidx.media3.session.MediaConstants
 import androidx.media3.session.MediaLibraryService
 import androidx.media3.session.MediaSession
 import androidx.media3.session.SessionCommand
@@ -30,11 +32,13 @@ import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.SettableFuture
 import com.oxoghost.hexaplayer.R
+import com.oxoghost.hexaplayer.data.Artwork
 import com.oxoghost.hexaplayer.data.db.HexaDatabase
+import com.oxoghost.hexaplayer.data.toMediaItem
 import com.oxoghost.hexaplayer.repository.EqualizerRepository
-import com.oxoghost.hexaplayer.repository.MusicRepository
-import com.oxoghost.hexaplayer.repository.PlaylistRepository
 import com.oxoghost.hexaplayer.repository.QueueStore
+import com.oxoghost.hexaplayer.repository.SavedQueue
+import com.oxoghost.hexaplayer.ui.MainActivity
 import com.oxoghost.hexaplayer.widget.WidgetController
 import java.util.concurrent.Executors
 import kotlinx.coroutines.CoroutineScope
@@ -48,15 +52,9 @@ import kotlinx.coroutines.runBlocking
 class MusicService : MediaLibraryService() {
 
     private var mediaLibrarySession: MediaLibrarySession? = null
-    private val musicRepo: MusicRepository by lazy { MusicRepository(this) }
-    private val playlistRepo: PlaylistRepository by lazy { PlaylistRepository(this) }
+    private val auto by lazy { AutoLibrary(this) { queueLoaded } }
+    @Volatile private var queueLoaded = false
     private val ioExecutor = Executors.newSingleThreadExecutor()
-
-    // Tracks the last browsed context so onSetMediaItems can expand a single tapped song
-    // to its full context queue (album / artist / playlist / folder).
-    // Only set for "leaf" browse nodes (not for TAB_SONGS / TAB_ALBUMS / etc.).
-    private var lastBrowseParentId: String = ""
-    private var lastBrowseItems: List<String> = emptyList()
 
     // Internal shuffle state: owned here so both the phone app and Android Auto
     // drive the SAME shuffler (a manual reorder of upcoming items). ExoPlayer's own
@@ -67,16 +65,9 @@ class MusicService : MediaLibraryService() {
         var audioSessionId: Int = 0
             private set
 
-        // Root / tab IDs for Android Auto browsing
-        const val ROOT_ID       = "__root__"
-        const val TAB_SONGS     = "__songs__"
-        const val TAB_ALBUMS    = "__albums__"
-        const val TAB_ARTISTS   = "__artists__"
-        const val TAB_PLAYLISTS = "__playlists__"
-        const val TAB_FOLDERS   = "__folders__"
-
-        // Custom session command + session-extras keys for the shared shuffler
+        // Custom session commands + session-extras keys for the shared shuffler
         const val CMD_SHUFFLE          = "com.oxoghost.hexaplayer.action.SHUFFLE"
+        const val CMD_REPEAT           = "com.oxoghost.hexaplayer.action.REPEAT"
         const val EXTRA_SHUFFLE_ON     = "hexa.shuffle_on"
         const val EXTRA_QUEUE_REORDERED = "hexa.queue_reordered"
         const val EXTRA_FORCE_ON       = "hexa.force_on"
@@ -93,7 +84,7 @@ class MusicService : MediaLibraryService() {
         }
     }
 
-    // ── Player listener → keep widgets in sync + update AA custom layout ─────
+    // ── Player listener → keep widgets in sync + update the shuffle/repeat buttons ─
     private val playerListener = object : Player.Listener {
         override fun onIsPlayingChanged(isPlaying: Boolean) {
             pushWidgetState()
@@ -105,6 +96,9 @@ class MusicService : MediaLibraryService() {
             pushWidgetState()
             mediaLibrarySession?.player?.let { tracker.onTransition(it, item, reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO) }
             saveQueueSoon()
+            // Recently played on the car's Home, once the play is recorded.
+            mainHandler.removeCallbacks(homeChanged)
+            mainHandler.postDelayed(homeChanged, 3_000)
         }
 
         override fun onPlaybackStateChanged(state: Int) {
@@ -113,15 +107,18 @@ class MusicService : MediaLibraryService() {
             if (state == Player.STATE_ENDED) tracker.onEnded()
         }
 
-        override fun onTimelineChanged(timeline: Timeline, reason: Int) = saveQueueSoon()
+        override fun onTimelineChanged(timeline: Timeline, reason: Int) {
+            queueLoaded = !timeline.isEmpty
+            saveQueueSoon()
+        }
 
         override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) {
-            updateCustomLayout()
+            updateButtons()
             saveQueueSoon()
         }
 
         override fun onRepeatModeChanged(repeatMode: Int) {
-            updateCustomLayout()
+            updateButtons()
             saveQueueSoon()
         }
 
@@ -136,7 +133,7 @@ class MusicService : MediaLibraryService() {
     private val queueStore by lazy { QueueStore(this) }
     private val history by lazy { HexaDatabase.get(this).plays() }
     private val tracker = PlayTracker { event -> ioExecutor.execute { runBlocking { history.insert(event) } } }
-    private val saveHandler = Handler(Looper.getMainLooper())
+    private val mainHandler = Handler(Looper.getMainLooper())
     private val saveQueue = Runnable {
         mediaLibrarySession?.player?.let { queueStore.save(it, shuffleOn) }
         pushWidgetState()
@@ -146,8 +143,30 @@ class MusicService : MediaLibraryService() {
 
     /** Debounced: many changes in a row (a new queue, a reorder) give one write. */
     private fun saveQueueSoon(delayMs: Long = 1_000) {
-        saveHandler.removeCallbacks(saveQueue)
-        saveHandler.postDelayed(saveQueue, delayMs)
+        mainHandler.removeCallbacks(saveQueue)
+        mainHandler.postDelayed(saveQueue, delayMs)
+    }
+
+    // ── Library changes → Android Auto reloads its lists ──────────────────────
+    private val libraryChanged = Runnable {
+        auto.invalidate()
+        AutoLibrary.TABS.forEach { mediaLibrarySession?.notifyChildrenChanged(it, Int.MAX_VALUE, null) }
+    }
+
+    private val homeChanged = Runnable {
+        mediaLibrarySession?.notifyChildrenChanged(AutoLibrary.HOME, Int.MAX_VALUE, null)
+    }
+
+    private val mediaObserver = object : ContentObserver(mainHandler) {
+        override fun onChange(selfChange: Boolean) {
+            mainHandler.removeCallbacks(libraryChanged)
+            mainHandler.postDelayed(libraryChanged, 2_000)
+        }
+    }
+
+    // The music folder, sort order and custom covers decide what the library shows.
+    private val settingsListener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, _ ->
+        mediaObserver.onChange(false)
     }
 
     private val widgetScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -176,10 +195,17 @@ class MusicService : MediaLibraryService() {
         if (player.mediaItemCount == 0) {
             val saved = queueStore.load() ?: return
             player.setMediaItems(saved.items.map { it.toMediaItem() }, saved.index, saved.positionMs)
-            player.repeatMode = saved.repeat
+            restoreModes(player, saved)
             player.prepare()
         }
         player.play()
+    }
+
+    /** Repeat and the service's own shuffle flag, as they were when [saved] was written. */
+    private fun restoreModes(player: Player, saved: SavedQueue) {
+        player.repeatMode = saved.repeat
+        shuffleOn = saved.shuffle
+        afterShuffleChanged(reordered = false)
     }
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
@@ -199,15 +225,20 @@ class MusicService : MediaLibraryService() {
         audioSessionId = player.audioSessionId
         player.addListener(playerListener)
         mediaLibrarySession = MediaLibrarySession.Builder(this, player, LibraryCallback())
-            .setCustomLayout(buildCustomLayout(player))
+            .setMediaButtonPreferences(buildButtons(player))
+            .setSessionActivity(openAppIntent())
             .build()
         registerReceiver(noisyReceiver, IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY))
+        contentResolver.registerContentObserver(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, true, mediaObserver)
+        listOf("hexa_prefs", "cover_overrides", "hexa_playlists").forEach {
+            getSharedPreferences(it, MODE_PRIVATE).registerOnSharedPreferenceChangeListener(settingsListener)
+        }
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession? =
         mediaLibrarySession
 
-    /** Handle widget control intents (play/pause, next, previous, repeat, shuffle). */
+    /** Handle widget control intents (play/pause, next, previous, resume). */
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val result = super.onStartCommand(intent, flags, startId)
         val player = mediaLibrarySession?.player ?: return result
@@ -224,16 +255,20 @@ class MusicService : MediaLibraryService() {
 
     override fun onTaskRemoved(rootIntent: Intent?) {
         val session = mediaLibrarySession
-        val carConnected = session != null && session.connectedControllers.any {
-            session.isAutoCompanionController(it) || session.isAutomotiveController(it)
-        }
+        val carConnected = session != null && session.connectedControllers.any { isCar(session, it) }
         // Swiping the app away stops the music, unless a car is still playing it
         if (!carConnected) pauseAllPlayersAndStopSelf()
     }
 
     override fun onDestroy() {
         unregisterReceiver(noisyReceiver)
-        saveHandler.removeCallbacks(saveQueue)
+        contentResolver.unregisterContentObserver(mediaObserver)
+        listOf("hexa_prefs", "cover_overrides", "hexa_playlists").forEach {
+            getSharedPreferences(it, MODE_PRIVATE).unregisterOnSharedPreferenceChangeListener(settingsListener)
+        }
+        mainHandler.removeCallbacks(saveQueue)
+        mainHandler.removeCallbacks(libraryChanged)
+        mainHandler.removeCallbacks(homeChanged)
         mediaLibrarySession?.player?.let { queueStore.save(it, shuffleOn) }
         tracker.flush()
         mediaLibrarySession?.run {
@@ -251,18 +286,24 @@ class MusicService : MediaLibraryService() {
         super.onDestroy()
     }
 
-    // ── Android Auto custom layout (shuffle + repeat) ─────────────────────────
+    private fun openAppIntent(): PendingIntent = PendingIntent.getActivity(
+        this, 0,
+        Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
+        PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+    )
 
-    private fun buildCustomLayout(player: Player): List<CommandButton> = listOf(
-        CommandButton.Builder(
-            if (shuffleOn) CommandButton.ICON_SHUFFLE_ON
-            else CommandButton.ICON_SHUFFLE_OFF
-        )
-            // Custom command (NOT COMMAND_SET_SHUFFLE_MODE) so taps run our internal
-            // shuffler instead of ExoPlayer's built-in random ordering.
+    private fun isCar(session: MediaSession, controller: MediaSession.ControllerInfo) =
+        session.isAutoCompanionController(controller) || session.isAutomotiveController(controller)
+
+    // ── Shuffle + repeat buttons (notification, Android Auto) ────────────────
+
+    // Both are custom session commands: Android Auto only shows buttons backed by one, and
+    // shuffle must run our shuffler instead of ExoPlayer's random order.
+    private fun buildButtons(player: Player): List<CommandButton> = listOf(
+        CommandButton.Builder(if (shuffleOn) CommandButton.ICON_SHUFFLE_ON else CommandButton.ICON_SHUFFLE_OFF)
             .setSessionCommand(SessionCommand(CMD_SHUFFLE, Bundle.EMPTY))
-            .setDisplayName("Shuffle")
-            .setIconResId(R.drawable.ic_shuffle)
+            .setDisplayName(if (shuffleOn) "Shuffle on" else "Shuffle off")
+            .setCustomIconResId(R.drawable.ic_auto_shuffle)
             .build(),
         CommandButton.Builder(
             when (player.repeatMode) {
@@ -271,18 +312,33 @@ class MusicService : MediaLibraryService() {
                 else                   -> CommandButton.ICON_REPEAT_OFF
             }
         )
-            .setPlayerCommand(Player.COMMAND_SET_REPEAT_MODE)
-            .setDisplayName("Repeat")
-            .setIconResId(
-                if (player.repeatMode == Player.REPEAT_MODE_ONE) R.drawable.ic_repeat_one
-                else R.drawable.ic_repeat
+            .setSessionCommand(SessionCommand(CMD_REPEAT, Bundle.EMPTY))
+            .setDisplayName(
+                when (player.repeatMode) {
+                    Player.REPEAT_MODE_ONE -> "Repeat one"
+                    Player.REPEAT_MODE_ALL -> "Repeat all"
+                    else                   -> "Repeat off"
+                }
+            )
+            .setCustomIconResId(
+                if (player.repeatMode == Player.REPEAT_MODE_ONE) R.drawable.ic_auto_repeat_one
+                else R.drawable.ic_auto_repeat
             )
             .build()
     )
 
-    private fun updateCustomLayout() {
+    private fun updateButtons() {
         val session = mediaLibrarySession ?: return
-        session.setCustomLayout(buildCustomLayout(session.player))
+        session.setMediaButtonPreferences(buildButtons(session.player))
+    }
+
+    /** Off, all, one, like the app's repeat button. */
+    private fun cycleRepeat(player: Player) {
+        player.repeatMode = when (player.repeatMode) {
+            Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ALL
+            Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
+            else                   -> Player.REPEAT_MODE_OFF
+        }
     }
 
     /**
@@ -326,9 +382,9 @@ class MusicService : MediaLibraryService() {
         afterShuffleChanged(reordered)
     }
 
-    /** Refresh the AA icon and notify controllers (phone app) of the new shuffle state. */
+    /** Refresh the buttons and notify controllers (phone app) of the new shuffle state. */
     private fun afterShuffleChanged(reordered: Boolean) {
-        updateCustomLayout()
+        updateButtons()
         mediaLibrarySession?.setSessionExtras(
             Bundle().apply {
                 putBoolean(EXTRA_SHUFFLE_ON, shuffleOn)
@@ -337,54 +393,112 @@ class MusicService : MediaLibraryService() {
         )
     }
 
-    // ── Android Auto library callback ─────────────────────────────────────────
+    // ── Android Auto ──────────────────────────────────────────────────────────
+
+    /** Runs [block] on the IO thread; a crash becomes [onError]. */
+    private fun <T> onIo(onError: () -> T, block: () -> T): ListenableFuture<T> {
+        val future = SettableFuture.create<T>()
+        ioExecutor.execute { future.set(runCatching(block).getOrElse { onError() }) }
+        return future
+    }
+
+    /** A queue picked in Android Auto, with the app's own `ctx:` ids so the phone treats it like its own. */
+    private fun startQueue(queue: AutoQueue, startPositionMs: Long): MediaSession.MediaItemsWithStartPosition {
+        queueStore.source = queue.source
+        mainHandler.post {
+            shuffleOn = queue.shuffled
+            afterShuffleChanged(reordered = false)
+        }
+        return MediaSession.MediaItemsWithStartPosition(
+            queue.songs.mapIndexed { i, song -> song.toMediaItem("ctx:$i") },
+            queue.start,
+            if (startPositionMs == C.TIME_UNSET) 0L else startPositionMs,
+        )
+    }
+
+    /** The remembered queue, or everything shuffled when there is none. */
+    private fun resumeOrShuffle(): MediaSession.MediaItemsWithStartPosition? {
+        queueStore.load()?.let { saved ->
+            mainHandler.post { mediaLibrarySession?.player?.let { restoreModes(it, saved) } }
+            return MediaSession.MediaItemsWithStartPosition(saved.items.map { it.toMediaItem() }, saved.index, saved.positionMs)
+        }
+        return auto.shuffleAll()?.let { startQueue(it, 0L) }
+    }
+
     private inner class LibraryCallback : MediaLibrarySession.Callback {
 
-        // Send the current custom layout to every new controller (phone app, AA, etc.)
-        // so shuffle/repeat icons always reflect the real state on connect.
-        // Also expose the custom shuffle command so the buttons are tappable everywhere.
         override fun onConnect(
             session: MediaSession,
             controller: MediaSession.ControllerInfo
         ): MediaSession.ConnectionResult {
+            if (isCar(session, controller)) {
+                // Covers come from ArtworkProvider, which only the car may read.
+                grantUriPermission(
+                    controller.packageName, Artwork.root,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PREFIX_URI_PERMISSION,
+                )
+                auto.invalidate()
+            }
             val sessionCommands =
                 MediaSession.ConnectionResult.DEFAULT_SESSION_AND_LIBRARY_COMMANDS.buildUpon()
                     .add(SessionCommand(CMD_SHUFFLE, Bundle.EMPTY))
+                    .add(SessionCommand(CMD_REPEAT, Bundle.EMPTY))
                     .build()
-            return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
+            return MediaSession.ConnectionResult.AcceptedResultBuilder(session, controller)
                 .setAvailableSessionCommands(sessionCommands)
-                .setCustomLayout(buildCustomLayout(session.player))
+                .setMediaButtonPreferences(buildButtons(session.player))
                 .build()
         }
 
-        // Single entry point for shuffle from ANY surface (phone app or Android Auto).
+        override fun onPostConnect(session: MediaSession, controller: MediaSession.ControllerInfo) {
+            if (!isCar(session, controller)) return
+            if (auto.hasAccess()) {
+                session.setPlaybackException(controller, null)
+                return
+            }
+            // Shown by Auto with a button that opens the app on the phone.
+            session.setPlaybackException(
+                controller,
+                PlaybackException(
+                    "Open HexaPlayer on your phone to let it read your music", null,
+                    PlaybackException.ERROR_CODE_IO_NO_PERMISSION,
+                    Bundle().apply {
+                        putString(MediaConstants.EXTRAS_KEY_ERROR_RESOLUTION_ACTION_LABEL_COMPAT, "Open HexaPlayer")
+                        putParcelable(MediaConstants.EXTRAS_KEY_ERROR_RESOLUTION_ACTION_INTENT_COMPAT, openAppIntent())
+                    },
+                ),
+            )
+        }
+
+        // Single entry point for shuffle and repeat from ANY surface (phone app or Android Auto).
         override fun onCustomCommand(
             session: MediaSession,
             controller: MediaSession.ControllerInfo,
             customCommand: SessionCommand,
             args: Bundle
         ): ListenableFuture<SessionResult> {
-            if (customCommand.customAction == CMD_SHUFFLE) {
-                if (args.containsKey(EXTRA_FORCE_ON)) {
-                    // Caller already arranged the order (e.g. "Shuffle all"); just set state.
-                    shuffleOn = args.getBoolean(EXTRA_FORCE_ON)
-                    afterShuffleChanged(reordered = false)
-                } else {
-                    performInternalShuffle()
+            when (customCommand.customAction) {
+                CMD_SHUFFLE -> {
+                    if (args.containsKey(EXTRA_FORCE_ON)) {
+                        // Caller already arranged the order (e.g. "Shuffle all"); just set state.
+                        shuffleOn = args.getBoolean(EXTRA_FORCE_ON)
+                        afterShuffleChanged(reordered = false)
+                    } else {
+                        performInternalShuffle()
+                    }
                 }
-                return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+                CMD_REPEAT -> cycleRepeat(session.player)
+                else -> return super.onCustomCommand(session, controller, customCommand, args)
             }
-            return super.onCustomCommand(session, controller, customCommand, args)
+            return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
         }
 
         override fun onGetLibraryRoot(
             session: MediaLibrarySession,
             browser: MediaSession.ControllerInfo,
             params: LibraryParams?
-        ): ListenableFuture<LibraryResult<MediaItem>> {
-            val root = tab(ROOT_ID, "HexaPlayer")
-            return Futures.immediateFuture(LibraryResult.ofItem(root, null))
-        }
+        ): ListenableFuture<LibraryResult<MediaItem>> =
+            Futures.immediateFuture(LibraryResult.ofItem(auto.root(), auto.rootParams()))
 
         override fun onGetChildren(
             session: MediaLibrarySession,
@@ -393,48 +507,35 @@ class MusicService : MediaLibraryService() {
             page: Int,
             pageSize: Int,
             params: LibraryParams?
-        ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> {
-            val future = SettableFuture.create<LibraryResult<ImmutableList<MediaItem>>>()
-            ioExecutor.execute {
-                try {
-                    future.set(buildChildren(parentId, page, pageSize))
-                } catch (_: Exception) {
-                    future.set(LibraryResult.ofError(SessionError.ERROR_UNKNOWN))
-                }
+        ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> =
+            onIo({ LibraryResult.ofError(SessionError.ERROR_UNKNOWN) }) {
+                val children = auto.children(parentId)
+                if (children == null) LibraryResult.ofError(SessionError.ERROR_BAD_VALUE)
+                else LibraryResult.ofItemList(ImmutableList.copyOf(children.page(page, pageSize)), params)
             }
-            return future
-        }
 
         override fun onGetItem(
             session: MediaLibrarySession,
             browser: MediaSession.ControllerInfo,
             mediaId: String
-        ): ListenableFuture<LibraryResult<MediaItem>> {
-            val future = SettableFuture.create<LibraryResult<MediaItem>>()
-            ioExecutor.execute {
-                try {
-                    if (mediaId.startsWith("song:")) {
-                        val id   = mediaId.removePrefix("song:").toLongOrNull()
-                        val song = musicRepo.getAllSongs().firstOrNull { it.id == id }
-                        if (song != null) future.set(LibraryResult.ofItem(song.toAutoItem(), null))
-                        else future.set(LibraryResult.ofError(SessionError.ERROR_BAD_VALUE))
-                    } else {
-                        future.set(LibraryResult.ofError(SessionError.ERROR_BAD_VALUE))
-                    }
-                } catch (_: Exception) {
-                    future.set(LibraryResult.ofError(SessionError.ERROR_UNKNOWN))
-                }
+        ): ListenableFuture<LibraryResult<MediaItem>> =
+            onIo({ LibraryResult.ofError(SessionError.ERROR_UNKNOWN) }) {
+                auto.item(mediaId)?.let { LibraryResult.ofItem(it, null) }
+                    ?: LibraryResult.ofError(SessionError.ERROR_BAD_VALUE)
             }
-            return future
-        }
 
+        // Auto waits for notifySearchResultChanged before it asks for the results.
         override fun onSearch(
             session: MediaLibrarySession,
             browser: MediaSession.ControllerInfo,
             query: String,
             params: LibraryParams?
         ): ListenableFuture<LibraryResult<Void>> =
-            Futures.immediateFuture(LibraryResult.ofVoid())
+            onIo({ LibraryResult.ofError(SessionError.ERROR_UNKNOWN) }) {
+                val count = auto.search(query).size
+                mainHandler.post { session.notifySearchResultChanged(browser, query, count, params) }
+                LibraryResult.ofVoid()
+            }
 
         override fun onGetSearchResult(
             session: MediaLibrarySession,
@@ -443,66 +544,37 @@ class MusicService : MediaLibraryService() {
             page: Int,
             pageSize: Int,
             params: LibraryParams?
-        ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> {
-            val future = SettableFuture.create<LibraryResult<ImmutableList<MediaItem>>>()
-            ioExecutor.execute {
-                try {
-                    val q = query.lowercase().trim()
-                    val matching = musicRepo.getAllSongs().filter { song ->
-                        song.title.lowercase().contains(q) ||
-                        song.artist.lowercase().contains(q) ||
-                        song.album.lowercase().contains(q)
-                    }
-                    val paged = matching.page(page, pageSize)
-                    future.set(
-                        LibraryResult.ofItemList(
-                            ImmutableList.copyOf(paged.map { it.toAutoItem() }),
-                            null
-                        )
-                    )
-                } catch (_: Exception) {
-                    future.set(LibraryResult.ofError(SessionError.ERROR_UNKNOWN))
-                }
+        ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> =
+            onIo({ LibraryResult.ofError(SessionError.ERROR_UNKNOWN) }) {
+                LibraryResult.ofItemList(ImmutableList.copyOf(auto.search(query).page(page, pageSize)), params)
             }
-            return future
-        }
 
         /**
-         * Resolves media items by mediaId to playable URIs, used by voice commands and direct play.
+         * Requests that add items: the app's own items already carry a uri; Auto rows and voice
+         * requests are turned into songs.
          */
         override fun onAddMediaItems(
             mediaSession: MediaSession,
             controller: MediaSession.ControllerInfo,
             mediaItems: List<MediaItem>
         ): ListenableFuture<List<MediaItem>> {
-            val future = SettableFuture.create<List<MediaItem>>()
-            ioExecutor.execute {
-                try {
-                    val allSongs by lazy { musicRepo.getAllSongs() }
-                    val resolved = mediaItems.map { item ->
-                        if (item.localConfiguration != null) return@map item
-                        if (item.mediaId.startsWith("song:")) {
-                            val id = item.mediaId.removePrefix("song:").toLongOrNull()
-                            allSongs.firstOrNull { it.id == id }?.toAutoItem() ?: item
-                        } else item
-                    }
-                    future.set(resolved)
-                } catch (_: Exception) {
-                    future.set(mediaItems)
+            if (mediaItems.all { it.localConfiguration != null }) return Futures.immediateFuture(mediaItems)
+            return onIo({ mediaItems.filter { it.localConfiguration != null } }) {
+                val query = mediaItems.singleOrNull()?.requestMetadata?.searchQuery
+                if (query != null) {
+                    val queue = auto.voice(query, mediaItems.single().requestMetadata.extras) ?: auto.shuffleAll()
+                    queue?.songs.orEmpty().mapIndexed { i, song -> song.toMediaItem("ctx:$i") }
+                } else {
+                    val songs = auto.songsFor(mediaItems.filter { it.localConfiguration == null }.map { it.mediaId })
+                    mediaItems.filter { it.localConfiguration != null } + songs.map { it.toMediaItem("uq:${System.nanoTime()}") }
                 }
             }
-            return future
         }
 
         /**
-         * Intercepts play commands from Android Auto to build the correct context queue.
-         *
-         * When the user taps a single song in Android Auto:
-         * - If it was in the last browsed context (album/artist/playlist/folder), the full
-         *   context list is used as the queue, starting at the tapped song.
-         * - Otherwise, the song's album is used as the queue (matching phone-app behavior).
-         *
-         * This ensures the queue is populated correctly after playing from Auto.
+         * Play requests. The app sends ready items and is left alone. From Android Auto:
+         * a tapped row queues the list it sits in, Resume brings back the remembered queue,
+         * and a voice request plays what it names (or resumes when it names nothing).
          */
         override fun onSetMediaItems(
             mediaSession: MediaSession,
@@ -511,282 +583,44 @@ class MusicService : MediaLibraryService() {
             startIndex: Int,
             startPositionMs: Long
         ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> {
-            val future = SettableFuture.create<MediaSession.MediaItemsWithStartPosition>()
-            ioExecutor.execute {
-                try {
-                    future.set(resolveWithContext(mediaItems, startIndex, startPositionMs))
-                } catch (_: Exception) {
-                    future.set(
-                        MediaSession.MediaItemsWithStartPosition(
-                            mediaItems, startIndex, startPositionMs
-                        )
-                    )
-                }
+            val passThrough = MediaSession.MediaItemsWithStartPosition(mediaItems, startIndex, startPositionMs)
+            if (mediaItems.all { it.localConfiguration != null }) return Futures.immediateFuture(passThrough)
+            return onIo({ passThrough }) {
+                val single = mediaItems.singleOrNull()
+                val query = single?.requestMetadata?.searchQuery
+                when {
+                    single?.mediaId == AutoLibrary.RESUME -> resumeOrShuffle()
+                    query != null && query.isBlank() -> resumeOrShuffle()
+                    query != null -> auto.voice(query, single.requestMetadata.extras)?.let { startQueue(it, 0L) }
+                    single != null -> auto.resolve(single.mediaId)?.let { startQueue(it, startPositionMs) }
+                    else -> {
+                        val songs = auto.songsFor(mediaItems.map { it.mediaId })
+                        if (songs.isEmpty()) null
+                        else startQueue(AutoQueue(songs, startIndex.coerceIn(0, songs.lastIndex), false, null), startPositionMs)
+                    }
+                } ?: passThrough
             }
-            return future
-        }
-    }
-
-    // ── Queue context resolution ──────────────────────────────────────────────
-
-    /**
-     * Resolves a play request to a full queue.
-     *
-     * Single-song taps from a browsed context are expanded to the full context list.
-     * Multi-item sets have their URIs resolved and are passed through as-is.
-     */
-    private fun resolveWithContext(
-        mediaItems: List<MediaItem>,
-        startIndex: Int,
-        startPositionMs: Long
-    ): MediaSession.MediaItemsWithStartPosition {
-        if (mediaItems.size == 1 && mediaItems[0].mediaId.startsWith("song:")) {
-            val clickedId = mediaItems[0].mediaId
-
-            // Use the last browsed context when the tapped song belongs to it
-            val contextIds: List<String> = if (
-                lastBrowseParentId.isNotEmpty() && clickedId in lastBrowseItems
-            ) {
-                lastBrowseItems
-            } else {
-                // Fallback: build the album queue, as the phone app does
-                val songId = clickedId.removePrefix("song:").toLongOrNull()
-                val song = if (songId != null) {
-                    musicRepo.getAllSongs().firstOrNull { it.id == songId }
-                } else null
-                if (song != null) {
-                    musicRepo.getAllSongs()
-                        .filter { it.albumId == song.albumId }
-                        .sortedBy { it.title }
-                        .map { "song:${it.id}" }
-                } else {
-                    listOf(clickedId)
-                }
-            }
-
-            val allSongsById = musicRepo.getAllSongs().associateBy { it.id }
-            val resolved = contextIds.mapNotNull { mid ->
-                val id = mid.removePrefix("song:").toLongOrNull() ?: return@mapNotNull null
-                allSongsById[id]?.toAutoItem()
-            }
-            val idx = resolved.indexOfFirst { it.mediaId == clickedId }.coerceAtLeast(0)
-            return MediaSession.MediaItemsWithStartPosition(resolved, idx, startPositionMs)
         }
 
-        // Multi-item or non-song items: resolve URIs
-        val allSongsById by lazy { musicRepo.getAllSongs().associateBy { it.id } }
-        val resolved = mediaItems.map { item ->
-            if (item.localConfiguration != null) return@map item
-            if (item.mediaId.startsWith("song:")) {
-                val id = item.mediaId.removePrefix("song:").toLongOrNull()
-                if (id != null) allSongsById[id]?.toAutoItem() ?: item else item
-            } else item
-        }
-        return MediaSession.MediaItemsWithStartPosition(resolved, startIndex, startPositionMs)
-    }
-
-    // ── Library building helpers ──────────────────────────────────────────────
-
-    private fun buildChildren(
-        parentId: String,
-        page: Int,
-        pageSize: Int
-    ): LibraryResult<ImmutableList<MediaItem>> {
-        return when {
-            parentId == ROOT_ID -> {
-                // Reset context on returning to root
-                lastBrowseParentId = ""
-                lastBrowseItems = emptyList()
-                val tabs = ImmutableList.of(
-                    tab(TAB_SONGS,     "Songs"),
-                    tab(TAB_ALBUMS,    "Albums"),
-                    tab(TAB_ARTISTS,   "Artists"),
-                    tab(TAB_PLAYLISTS, "Playlists"),
-                    tab(TAB_FOLDERS,   "Folders")
-                )
-                LibraryResult.ofItemList(tabs, null)
-            }
-
-            parentId == TAB_SONGS -> {
-                // Top-level song list, no context: album fallback used in onSetMediaItems
-                lastBrowseParentId = ""
-                lastBrowseItems = emptyList()
-                val songs = musicRepo.getAllSongs()
-                val paged = songs.page(page, pageSize)
-                LibraryResult.ofItemList(ImmutableList.copyOf(paged.map { it.toAutoItem() }), null)
-            }
-
-            parentId == TAB_ALBUMS -> {
-                lastBrowseParentId = ""
-                lastBrowseItems = emptyList()
-                val albums = musicRepo.groupByAlbums(musicRepo.getAllSongs())
-                val items = albums.map { album ->
-                    browsable(
-                        id       = "album:${album.id}",
-                        title    = album.title,
-                        subtitle = album.artist,
-                        artUri   = musicRepo.getAlbumArtUri(album.id)
-                    )
-                }
-                LibraryResult.ofItemList(ImmutableList.copyOf(items), null)
-            }
-
-            parentId == TAB_ARTISTS -> {
-                lastBrowseParentId = ""
-                lastBrowseItems = emptyList()
-                val artists = musicRepo.groupByArtists(musicRepo.getAllSongs())
-                val items = artists.map { artist ->
-                    browsable(
-                        id       = "artist:${artist.name}",
-                        title    = artist.name,
-                        subtitle = "${artist.songs.size} songs"
-                    )
-                }
-                LibraryResult.ofItemList(ImmutableList.copyOf(items), null)
-            }
-
-            parentId == TAB_PLAYLISTS -> {
-                lastBrowseParentId = ""
-                lastBrowseItems = emptyList()
-                val playlists = playlistRepo.getAll()
-                val items = playlists.map { pl ->
-                    val artUri = pl.coverUri?.let { Uri.parse(it) }
-                    browsable(
-                        id       = "playlist:${pl.id}",
-                        title    = pl.name,
-                        subtitle = "${pl.songIds.size} songs",
-                        artUri   = artUri
-                    )
-                }
-                LibraryResult.ofItemList(ImmutableList.copyOf(items), null)
-            }
-
-            parentId == TAB_FOLDERS -> {
-                lastBrowseParentId = ""
-                lastBrowseItems = emptyList()
-                val songs = musicRepo.getAllSongs()
-                val folders = musicRepo.getTopLevelFolders(songs)
-                val items = folders.map { path ->
-                    val name = path.trimEnd('/').substringAfterLast('/').ifBlank { path }
-                    browsable(id = "folder:$path", title = name, subtitle = path)
-                }
-                LibraryResult.ofItemList(ImmutableList.copyOf(items), null)
-            }
-
-            parentId.startsWith("album:") -> {
-                val albumId = parentId.removePrefix("album:").toLongOrNull()
-                    ?: return LibraryResult.ofError(SessionError.ERROR_BAD_VALUE)
-                val songs = musicRepo.getAllSongs().filter { it.albumId == albumId }
-                // Track context so onSetMediaItems can build the full album queue
-                lastBrowseParentId = parentId
-                lastBrowseItems = songs.map { "song:${it.id}" }
-                LibraryResult.ofItemList(ImmutableList.copyOf(songs.map { it.toAutoItem() }), null)
-            }
-
-            parentId.startsWith("artist:") -> {
-                val name  = parentId.removePrefix("artist:")
-                val songs = musicRepo.getAllSongs().filter { it.artist == name }
-                lastBrowseParentId = parentId
-                lastBrowseItems = songs.map { "song:${it.id}" }
-                LibraryResult.ofItemList(ImmutableList.copyOf(songs.map { it.toAutoItem() }), null)
-            }
-
-            parentId.startsWith("playlist:") -> {
-                val playlistId = parentId.removePrefix("playlist:")
-                val playlist = playlistRepo.getAll().firstOrNull { it.id == playlistId }
-                    ?: return LibraryResult.ofError(SessionError.ERROR_BAD_VALUE)
-                val allSongsById = musicRepo.getAllSongs().associateBy { it.id }
-                val songs = playlist.songIds.mapNotNull { allSongsById[it] }
-                lastBrowseParentId = parentId
-                lastBrowseItems = songs.map { "song:${it.id}" }
-                LibraryResult.ofItemList(ImmutableList.copyOf(songs.map { it.toAutoItem() }), null)
-            }
-
-            parentId.startsWith("folder:") -> {
-                val folderPath = parentId.removePrefix("folder:")
-                val allSongs = musicRepo.getAllSongs()
-                val (subfolders, directSongs) = musicRepo.getFolderContents(allSongs, folderPath)
-
-                val items = mutableListOf<MediaItem>()
-                // Subfolder nodes (browsable) come first
-                subfolders.forEach { path ->
-                    val name = path.trimEnd('/').substringAfterLast('/').ifBlank { path }
-                    items.add(browsable(id = "folder:$path", title = name, subtitle = path))
-                }
-                // Songs directly inside this folder
-                directSongs.forEach { items.add(it.toAutoItem()) }
-
-                // Track only the direct songs (not subfolders) as the playable context
-                lastBrowseParentId = parentId
-                lastBrowseItems = directSongs.map { "song:${it.id}" }
-
-                LibraryResult.ofItemList(ImmutableList.copyOf(items), null)
-            }
-
-            else -> LibraryResult.ofError(SessionError.ERROR_BAD_VALUE)
-        }
-    }
-
-    // ── MediaItem factory helpers ─────────────────────────────────────────────
-
-    /** Browsable (non-playable) tab item. */
-    private fun tab(id: String, title: String): MediaItem =
-        MediaItem.Builder()
-            .setMediaId(id)
-            .setMediaMetadata(
-                MediaMetadata.Builder()
-                    .setTitle(title)
-                    .setIsBrowsable(true)
-                    .setIsPlayable(false)
-                    .build()
+        /** Play pressed in the car or on a headset with nothing loaded: bring back the remembered queue. */
+        override fun onPlaybackResumption(
+            mediaSession: MediaSession,
+            controller: MediaSession.ControllerInfo,
+            isForPlayback: Boolean
+        ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> {
+            val saved = queueStore.load()
+                ?: return Futures.immediateFailedFuture(UnsupportedOperationException("Nothing to resume"))
+            if (isForPlayback) restoreModes(mediaSession.player, saved)
+            return Futures.immediateFuture(
+                MediaSession.MediaItemsWithStartPosition(saved.items.map { it.toMediaItem() }, saved.index, saved.positionMs)
             )
-            .build()
-
-    /** Browsable album / artist / playlist / folder node. */
-    private fun browsable(
-        id: String,
-        title: String,
-        subtitle: String = "",
-        artUri: Uri? = null
-    ): MediaItem {
-        val meta = MediaMetadata.Builder()
-            .setTitle(title)
-            .setArtist(subtitle)
-            .setIsBrowsable(true)
-            .setIsPlayable(false)
-        if (artUri != null) meta.setArtworkUri(artUri)
-        return MediaItem.Builder()
-            .setMediaId(id)
-            .setMediaMetadata(meta.build())
-            .build()
+        }
     }
 
-    // ── List paging helper ────────────────────────────────────────────────────
     private fun <T> List<T>.page(page: Int, size: Int): List<T> {
-        if (size <= 0) return this
+        if (size <= 0 || size == Int.MAX_VALUE) return this
         val from = page * size
         if (from >= this.size) return emptyList()
         return subList(from, minOf(from + size, this.size))
     }
-}
-
-// ── Song → Auto MediaItem ─────────────────────────────────────────────────────
-private fun com.oxoghost.hexaplayer.data.Song.toAutoItem(): MediaItem {
-    val artUri = ContentUris.withAppendedId(
-        Uri.parse("content://media/external/audio/albumart"), albumId
-    )
-    return MediaItem.Builder()
-        .setMediaId("song:$id")
-        .setUri(uri)
-        .setMediaMetadata(
-            MediaMetadata.Builder()
-                .setTitle(title)
-                .setArtist(artist)
-                .setAlbumTitle(album)
-                .setArtworkUri(artUri)
-                .setIsBrowsable(false)
-                .setIsPlayable(true)
-                .build()
-        )
-        .build()
 }
