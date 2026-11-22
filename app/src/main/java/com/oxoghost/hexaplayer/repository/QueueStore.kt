@@ -7,6 +7,7 @@ import android.os.Bundle
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
+import com.oxoghost.hexaplayer.data.Artwork
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -30,7 +31,11 @@ data class SavedItem(
                 .setTitle(title)
                 .setArtist(artist)
                 .setAlbumTitle(album)
-                .setArtworkUri(ContentUris.withAppendedId(Uri.parse("content://media/external/audio/albumart"), albumId))
+                .setArtworkUri(
+                    if (songId >= 0) Artwork.song(songId)
+                    else ContentUris.withAppendedId(Uri.parse("content://media/external/audio/albumart"), albumId)
+                )
+                .setMediaType(MediaMetadata.MEDIA_TYPE_MUSIC)
                 .setExtras(Bundle().apply { putLong("albumId", albumId) })
                 .build()
         )

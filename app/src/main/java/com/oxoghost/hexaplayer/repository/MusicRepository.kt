@@ -2,7 +2,6 @@ package com.oxoghost.hexaplayer.repository
 
 import android.content.ContentUris
 import android.content.Context
-import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
 import com.oxoghost.hexaplayer.data.Album
@@ -129,10 +128,23 @@ class MusicRepository(private val context: Context) {
         return songs
     }
 
-    fun getAlbumArtUri(albumId: Long): Uri =
-        ContentUris.withAppendedId(
-            Uri.parse("content://media/external/audio/albumart"), albumId
-        )
+    /**
+     * The library as the app shows it: the music folder and sort order from the settings, unknown
+     * songs hidden when asked, and custom covers applied. Android Auto browses the same list.
+     */
+    fun loadVisibleSongs(): List<Song> {
+        val prefs = context.getSharedPreferences("hexa_prefs", Context.MODE_PRIVATE)
+        val folder = prefs.getString("music_folder", "").orEmpty().ifBlank { null }
+        var songs = getAllSongs(folder, prefs.getInt("sort_order", 0))
+        if (!prefs.getBoolean("show_unknown", true)) {
+            songs = songs.filter { s ->
+                s.title.isNotBlank() && s.title != "Unknown" &&
+                s.artist.isNotBlank() && s.artist != "Unknown Artist"
+            }
+        }
+        val covers = CoverRepository(context)
+        return songs.map { song -> covers.getOverride(song.id)?.let { song.copy(customCoverUri = it) } ?: song }
+    }
 
     fun groupByAlbums(songs: List<Song>): List<Album> {
         return songs.groupBy { it.albumId to it.album }
